@@ -1,0 +1,89 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: notification-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/notification_service
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits-long}
+  expiration: 86400000 # 24 hours in milliseconds
+
+# Notification Service Configuration
+notification:
+  retry:
+    max-attempts: 3
+    delay-milliseconds: 5000
+  channels:
+    email:
+      enabled: true
+    telegram:
+      enabled: false
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+    whatsapp:
+      enabled: false
+      api-key: ${WHATSAPP_API_KEY:}
+    sms:
+      enabled: false
+      api-key: ${SMS_API_KEY:}
+
+# Spring Boot Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  info:
+    env:
+      enabled: true
+
+# Application Info
+info:
+  app:
+    name: Notification Service
+    description: Centralized notification management system
+    version: 1.0.0
+
+# Logging Configuration
+logging:
+  level:
+    com.ns: DEBUG
+    com.ns.config: INFO
+    com.ns.service.AuthService: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss} [%thread] %-5level %logger{20} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/notification-service.log
