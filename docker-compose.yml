@@ -1,2 +1,23 @@
-# Конфигурационный файл YAML
-# Добавьте сюда настройки сервиса
+services:
+  backend:
+    build: ./backend
+    container_name: notification-service-backend
+    environment:
+      DB_HOST: 195.38.164.168
+      DB_PORT: 5432
+      DB_NAME: notification_service
+      DB_USERNAME: notification_user
+      DB_PASSWORD: NotificationPass123!
+
+      # Реальный SMTP
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: openweserver@gmail.com
+      SPRING_MAIL_PASSWORD: cekgbswtttgzklja
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
