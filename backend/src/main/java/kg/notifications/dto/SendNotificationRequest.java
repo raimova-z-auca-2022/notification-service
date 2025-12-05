@@ -1,2 +1,19 @@
-// Точка входа или класс сервиса
-// Реализация будет добавлена позже
+package kg.notifications.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class SendNotificationRequest {
+
+    @NotBlank
+    @Email
+    private String recipientEmail;
+
+    @NotBlank
+    private String subject;
+
+    @NotBlank
+    private String body;
+}
