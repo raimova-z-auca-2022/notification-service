@@ -4,11 +4,6 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/**
- * Модель, соответствующая "большой" таблице public.notifications
- * на сервере. Мы используем только часть полей, остальные могут
- * оставаться null.
- */
 @Data
 public class Notification {
 
@@ -24,7 +19,7 @@ public class Notification {
 
     private String messageBody;
 
-    private String status;
+    private Integer statusId;
 
     private Integer retryCount;
 
@@ -37,4 +32,21 @@ public class Notification {
     private LocalDateTime updatedAt;
 
     private LocalDateTime expiresAt;
+
+
+    public kg.notifications.enums.NotificationStatus getStatusEnum() {
+        if (statusId == null) {
+            return null;
+        }
+        return kg.notifications.enums.NotificationStatus.fromId(statusId);
+    }
+
+    public void setStatusEnum(kg.notifications.enums.NotificationStatus status) {
+        if (status == null) {
+            this.statusId = null;
+        } else {
+            this.statusId = status.getId();
+        }
+    }
+
 }
