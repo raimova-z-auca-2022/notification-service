@@ -12,13 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
-  mailhog:
-    image: mailhog/mailhog
-    container_name: notification-service-mailhog
-    ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web UI (http://localhost:8025)
-
   backend:
     build: ./backend
     container_name: notification-service-backend
@@ -26,8 +19,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: notification_service
-      DB_USERNAME: notification_user
-      DB_PASSWORD: NotificationPass123!
+      # В будущем при переходе БД на сервер укажем значения для отдельного пользователя
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
 
       # Реальный SMTP
       SPRING_MAIL_HOST: smtp.gmail.com
