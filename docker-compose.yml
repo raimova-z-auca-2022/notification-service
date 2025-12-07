@@ -23,7 +23,7 @@ services:
     build: ./backend
     container_name: notification-service-backend
     environment:
-      DB_HOST: 195.38.164.168
+      DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: notification_service
       DB_USERNAME: notification_user
