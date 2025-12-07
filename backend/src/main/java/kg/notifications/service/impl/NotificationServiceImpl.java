@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import kg.notifications.dto.SendNotificationRequest;
 import kg.notifications.dto.SendNotificationResponse;
 import kg.notifications.entity.Notification;
+import kg.notifications.enums.NotificationStatus;
 import kg.notifications.repository.NotificationJdbcRepository;
 import kg.notifications.service.AsyncNotificationSender;
 import kg.notifications.service.AuditLogService;
@@ -36,7 +37,7 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setMessageBody(request.getBody());
 
         notification.setChannelType("EMAIL");
-        notification.setStatus("PENDING");
+        notification.setStatusEnum(NotificationStatus.PENDING);
         notification.setRetryCount(0);
         notification.setCreatedAt(LocalDateTime.now());
         notification.setUpdatedAt(LocalDateTime.now());
@@ -44,15 +45,16 @@ public class NotificationServiceImpl implements NotificationService {
         notificationRepository.insert(notification);
         Long id = notification.getNotificationId();
 
-        log.info("Notification {} saved with status PENDING", id);
+        NotificationStatus status = NotificationStatus.PENDING;
+        log.info("Notification {} saved with status {}", id, status.name());
 
-        auditLogService.logSendEmail(notification, "PENDING", null, httpRequest);
+        auditLogService.logSendEmail(notification, status.name(), null, httpRequest);
 
         asyncNotificationSender.sendAsync(id);
 
         return new SendNotificationResponse(
                 id,
-                "PENDING",
+                status.name(),
                 "Notification accepted for sending"
         );
     }
