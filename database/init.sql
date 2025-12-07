@@ -1,5 +1,3 @@
--- Справочник статусов уведомлений
-
 CREATE TABLE IF NOT EXISTS notification_status (
     id          SERIAL PRIMARY KEY,
     code        VARCHAR(50) UNIQUE NOT NULL,
@@ -37,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created_at
     ON notifications(created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_status
-    ON notifications(created_at DESC, status);
+    ON notifications(created_at DESC, status_id);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_expires
     ON notifications(expires_at);
@@ -46,10 +44,10 @@ CREATE INDEX IF NOT EXISTS idx_notifications_recipient
     ON notifications(recipient);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_status
-    ON notifications(status);
+    ON notifications(status_id);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_status_channel
-    ON notifications(status, channel_type);
+    ON notifications(status_id, channel_type);
 
 
 CREATE TABLE IF NOT EXISTS audit_log (
