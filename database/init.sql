@@ -1,4 +1,18 @@
--- Таблица уведомлений, максимально приближенная к боевой public.notifications
+-- Справочник статусов уведомлений
+
+CREATE TABLE IF NOT EXISTS notification_status (
+    id          SERIAL PRIMARY KEY,
+    code        VARCHAR(50) UNIQUE NOT NULL,
+    description VARCHAR(255)
+);
+
+INSERT INTO notification_status(code, description) VALUES
+    ('PENDING', 'Notification waiting for processing'),
+    ('SENDING', 'Notification is being sent'),
+    ('SENT',    'Notification successfully sent'),
+    ('FAILED',  'Notification failed to send')
+ON CONFLICT (code) DO NOTHING;
+
 
 CREATE TABLE IF NOT EXISTS notifications (
     notification_id BIGSERIAL PRIMARY KEY,
@@ -7,7 +21,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     recipient       VARCHAR(255) NOT NULL,
     subject         VARCHAR(255),
     message_body    TEXT         NOT NULL,
-    status          VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    status_id       INTEGER      NOT NULL DEFAULT 1 REFERENCES notification_status(id),
     retry_count     INTEGER      NOT NULL DEFAULT 0,
     error_message   TEXT,
     created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -37,13 +51,12 @@ CREATE INDEX IF NOT EXISTS idx_notifications_status
 CREATE INDEX IF NOT EXISTS idx_notifications_status_channel
     ON notifications(status, channel_type);
 
--- Таблица логов аудита (оставляем как была)
 
 CREATE TABLE IF NOT EXISTS audit_log (
     id BIGSERIAL PRIMARY KEY,
     action_type VARCHAR(64) NOT NULL,
     entity_type VARCHAR(64) NOT NULL,
-    entity_id   VARCHAR(64),
+    entity_id   BIGINT,
     details     TEXT,
     ip_address  VARCHAR(45),
     user_agent  TEXT,
