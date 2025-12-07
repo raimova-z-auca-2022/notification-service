@@ -42,8 +42,9 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setCreatedAt(LocalDateTime.now());
         notification.setUpdatedAt(LocalDateTime.now());
 
-        notificationRepository.insert(notification);
-        Long id = notification.getNotificationId();
+        Long id = notificationRepository.insert(notification);
+
+        notification.setNotificationId(id);
 
         NotificationStatus status = NotificationStatus.PENDING;
         log.info("Notification {} saved with status {}", id, status.name());
