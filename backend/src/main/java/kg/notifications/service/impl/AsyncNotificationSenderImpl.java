@@ -1,6 +1,7 @@
 package kg.notifications.service.impl;
 
 import kg.notifications.entity.Notification;
+import kg.notifications.enums.NotificationStatus;
 import kg.notifications.repository.NotificationJdbcRepository;
 import kg.notifications.service.AsyncNotificationSender;
 import kg.notifications.service.AuditLogService;
@@ -37,25 +38,26 @@ public class AsyncNotificationSenderImpl implements AsyncNotificationSender {
 
         Notification notification = notificationOpt.get();
 
-        String newStatus;
+        NotificationStatus newStatus;
         String errorMessage = null;
         LocalDateTime sentAt = null;
 
         try {
             emailService.sendEmail(notification);
 
-            newStatus = "SENT";
+            newStatus = NotificationStatus.SENT;
             sentAt = LocalDateTime.now();
-            notification.setStatus(newStatus);
+            notification.setStatusEnum(newStatus);
             notification.setSentAt(sentAt);
             notification.setUpdatedAt(LocalDateTime.now());
+
             notificationRepository.updateStatus(notificationId, newStatus, null, sentAt);
 
             log.info("Notification {} sent successfully", notificationId);
         } catch (Exception ex) {
-            newStatus = "FAILED";
+            newStatus = NotificationStatus.FAILED;
             errorMessage = ex.getMessage();
-            notification.setStatus(newStatus);
+            notification.setStatusEnum(newStatus);
             notification.setErrorMessage(errorMessage);
             notification.setUpdatedAt(LocalDateTime.now());
 
@@ -64,6 +66,6 @@ public class AsyncNotificationSenderImpl implements AsyncNotificationSender {
             log.error("Failed to send notification {}: {}", notificationId, ex.getMessage(), ex);
         }
 
-        auditLogService.logSendEmail(notification, newStatus, errorMessage, null);
+        auditLogService.logSendEmail(notification, newStatus.name(), errorMessage, null);
     }
 }
