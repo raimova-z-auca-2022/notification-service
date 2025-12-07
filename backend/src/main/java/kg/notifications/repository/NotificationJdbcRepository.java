@@ -1,6 +1,7 @@
 package kg.notifications.repository;
 
 import kg.notifications.entity.Notification;
+import kg.notifications.enums.NotificationStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -28,7 +29,7 @@ public class NotificationJdbcRepository {
             n.setRecipient(rs.getString("recipient"));
             n.setSubject(rs.getString("subject"));
             n.setMessageBody(rs.getString("message_body"));
-            n.setStatus(rs.getString("status"));
+            n.setStatusId((Integer) rs.getObject("status_id"));
             n.setRetryCount((Integer) rs.getObject("retry_count"));
             n.setErrorMessage(rs.getString("error_message"));
             n.setCreatedAt(rs.getTimestamp("created_at") != null
@@ -50,10 +51,11 @@ public class NotificationJdbcRepository {
     public Long insert(Notification n) {
         String sql =
                 "INSERT INTO notifications (" +
-                        " client_id, channel_type, recipient, subject, message_body, status, retry_count, error_message" +
+                        " client_id, channel_type, recipient, subject, message_body, status_id, retry_count, error_message" +
                         ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)" +
                         " RETURNING notification_id";
 
+        // created_at/updated_at/expires_at заполняются дефолтами на уровне БД
         return jdbcTemplate.queryForObject(
                 sql,
                 Long.class,
@@ -62,16 +64,16 @@ public class NotificationJdbcRepository {
                 n.getRecipient(),
                 n.getSubject(),
                 n.getMessageBody(),
-                n.getStatus(),
+                n.getStatusId(),
                 n.getRetryCount(),
                 n.getErrorMessage()
         );
     }
 
-    public void updateStatus(Long id, String status, String errorMessage, LocalDateTime sentAt) {
+    public void updateStatus(Long id, NotificationStatus status, String errorMessage, LocalDateTime sentAt) {
         String sql =
                 "UPDATE notifications " +
-                        "   SET status = ?, " +
+                        "   SET status_id = ?, " +
                         "       error_message = ?, " +
                         "       sent_at = ?, " +
                         "       updated_at = CURRENT_TIMESTAMP " +
@@ -79,7 +81,7 @@ public class NotificationJdbcRepository {
 
         jdbcTemplate.update(
                 sql,
-                status,
+                status != null ? status.getId() : null,
                 errorMessage,
                 sentAt,
                 id
@@ -89,7 +91,7 @@ public class NotificationJdbcRepository {
     public Optional<Notification> findById(Long id) {
         String sql =
                 "SELECT notification_id, client_id, channel_type, recipient, subject, " +
-                        "       message_body, status, retry_count, error_message, " +
+                        "       message_body, status_id, retry_count, error_message, " +
                         "       created_at, sent_at, updated_at, expires_at " +
                         "  FROM notifications " +
                         " WHERE notification_id = ?";
