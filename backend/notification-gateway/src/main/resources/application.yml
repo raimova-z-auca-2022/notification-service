@@ -1,0 +1,63 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: notification-gateway
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gateway_db}
+    username: ${DB_USERNAME:gateway}
+    password: ${DB_PASSWORD:gateway_pass}
+    driver-class-name: org.postgresql.Driver
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+logging:
+  level:
+    root: INFO
+    kg.notifications: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
+    routingEmail: ${ROUTING_EMAIL:email}
+    routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    queueEmail: ${QUEUE_EMAIL:q.notification.email}
+    queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+
+    # retry queues must exist; workers will publish to them directly
+    emailRetryQueues:
+      - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
+      - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
+      - ${EMAIL_RETRY_Q3:q.notification.email.retry.300s}
+      - ${EMAIL_RETRY_Q4:q.notification.email.retry.900s}
+      - ${EMAIL_RETRY_Q5:q.notification.email.retry.3600s}
+    emailDlq: ${EMAIL_DLQ:q.notification.email.dlq}
+
+    telegramRetryQueues:
+      - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}
+      - ${TG_RETRY_Q2:q.notification.telegram.retry.60s}
+      - ${TG_RETRY_Q3:q.notification.telegram.retry.300s}
+      - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
+      - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
+    telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
+
+  idempotency:
+    required: ${IDEMPOTENCY_REQUIRED:true}
+  publish:
+    confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}
