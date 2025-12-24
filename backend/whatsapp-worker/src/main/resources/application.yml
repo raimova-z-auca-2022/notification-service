@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: whatsapp-worker
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+
+server:
+  port: 8081
+
+app:
+  whatsapp:
+    api:
+      base-url: ${WHATSAPP_API_URL:https://api.example.com}
+      token: ${WHATSAPP_API_TOKEN:test-token}
+      timeout-ms: 30000
+    queue:
+      name: ns.whatsapp.q
+      dlq: ns.whatsapp.dlq
