@@ -1,0 +1,1 @@
+function mvn { & "C:\Program Files\apache-maven\bin\mvn.cmd" @args }

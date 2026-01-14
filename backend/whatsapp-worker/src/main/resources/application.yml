@@ -3,24 +3,60 @@ spring:
     name: whatsapp-worker
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${RABBIT_HOST:rabbitmq}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:admin}
+    password: ${RABBIT_PASS:admin123}
     listener:
       simple:
         acknowledge-mode: manual
         prefetch: 10
+        retry:
+          enabled: false
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres_whatsapp}:${DB_PORT:5432}/${DB_NAME:whatsapp_db}
+    username: ${DB_USERNAME:whatsapp}
+    password: ${DB_PASSWORD:whatsapp_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: ${SHOW_SQL:false}
 
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
 
 app:
   whatsapp:
     api:
       base-url: ${WHATSAPP_API_URL:https://api.example.com}
       token: ${WHATSAPP_API_TOKEN:test-token}
-      timeout-ms: 30000
+      timeout-ms: ${WHATSAPP_API_TIMEOUT_MS:30000}
+      max-retries: ${WHATSAPP_MAX_RETRIES:3}
     queue:
-      name: ns.whatsapp.q
-      dlq: ns.whatsapp.dlq
+      name: ${QUEUE_IN:ns.whatsapp.q}
+      dlq: ${QUEUE_DLQ:ns.whatsapp.dlq}
+    retry:
+      delays: ${RETRY_DELAYS:1s,5s,15s,1m,5m}
+
+logging:
+  level:
+    root: INFO
+    kg.notifications.whatsapp: ${LOG_LEVEL_WHATSAPP:DEBUG}
+    org.springframework.amqp: ${LOG_LEVEL_AMQP:INFO}
+    org.springframework.web.client: ${LOG_LEVEL_WEB_CLIENT:DEBUG}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
+  file:
+    name: logs/whatsapp-worker.log
