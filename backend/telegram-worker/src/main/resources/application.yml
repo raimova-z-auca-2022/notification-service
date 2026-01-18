@@ -1,0 +1,23 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: telegram-worker
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    listener:
+      simple:
+        acknowledge-mode: auto
+
+
+telegram:
+  bot:
+    token: "7955365673:AAGg-AMS5ZOaTYxMT5WH9IL491lyTSghUmI"
+    username: "MyCoolNotifier_bot"
+    api-url: "https://api.telegram.org/bot"
+  rabbitmq:
+    queue: "q.notification.telegram"
