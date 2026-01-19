@@ -1,4 +1,4 @@
-package kg.notifications.gateway.config;
+package kg.notifications.telegram.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,43 +14,32 @@ public class AppProperties {
 
     private Rabbit rabbit = new Rabbit();
     private Telegram telegram = new Telegram();
-    private Idempotency idempotency = new Idempotency();
-    private Publish publish = new Publish();
+    private LinkCode linkCode = new LinkCode();
 
     @Data
     public static class Rabbit {
         private String exchangeNotification;
-        private String exchangeStatus;
+        // private String exchangeStatus; // Можно добавить, если воркер шлет статусы
 
-        private String routingEmail;
         private String routingTelegram;
         private String routingTelegramRegistration;
 
-        private String queueEmail;
         private String queueTelegram;
         private String queueTelegramRegistration;
-        private String queueStatusGateway;
 
-        private List<String> emailRetryQueues = new ArrayList<>();
-        private String emailDlq;
-
+        // Для DLQ и Retry (если используем)
         private List<String> telegramRetryQueues = new ArrayList<>();
         private String telegramDlq;
     }
 
     @Data
     public static class Telegram {
-        private String botName;
         private String botToken;
+        private String botName;
     }
 
     @Data
-    public static class Idempotency {
-        private boolean required = true;
-    }
-
-    @Data
-    public static class Publish {
-        private long confirmTimeoutMs = 3000;
+    public static class LinkCode {
+        private int ttlMinutes = 60;
     }
 }

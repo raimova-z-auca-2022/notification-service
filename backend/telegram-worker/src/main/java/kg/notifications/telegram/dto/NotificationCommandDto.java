@@ -5,7 +5,7 @@ import java.io.Serializable;
 import java.time.OffsetDateTime;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record NotificationDto(
+public record NotificationCommandDto(
         String notificationId,
         String type,
         String recipient,

@@ -1,23 +1,46 @@
+# api-url: "https://api.telegram.org/bot"
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
 
 spring:
   application:
     name: telegram-worker
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres_telegram}:${DB_PORT:5432}/${DB_NAME:telegram_db}
+    username: ${DB_USERNAME:telegram}
+    password: ${DB_PASSWORD:telegram_pass}
+    driver-class-name: org.postgresql.Driver
   rabbitmq:
-    host: ${RABBIT_HOST:localhost}
-    port: ${RABBIT_PORT:5672}
-    username: ${RABBIT_USER:guest}
-    password: ${RABBIT_PASS:guest}
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
     listener:
       simple:
-        acknowledge-mode: auto
+        missing-queues-fatal: false
 
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
 
-telegram:
-  bot:
-    token: "7955365673:AAGg-AMS5ZOaTYxMT5WH9IL491lyTSghUmI"
-    username: "MyCoolNotifier_bot"
-    api-url: "https://api.telegram.org/bot"
-  rabbitmq:
-    queue: "q.notification.telegram"
+    routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
+
+    queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
+
+  telegram:
+    botToken: ${TELEGRAM_BOT_TOKEN}
+    botName: ${TELEGRAM_BOT_NAME:MyCoolNotifier_bot}
+
+  link-code:
+    ttlMinutes: 60
+
+retry:
+  max-attempts: ${RETRY_MAX_ATTEMPTS:5}
+
+logging:
+  level:
+    root: INFO
+    kg.notifications: DEBUG
+

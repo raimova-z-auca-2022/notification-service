@@ -21,105 +21,165 @@ public class RabbitConfig {
 
     private final AppProperties props;
 
+    // ---------- Common ----------
+
     @Bean
-    public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
-        return new Jackson2JsonMessageConverter(objectMapper);
+    public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper mapper) {
+        return new Jackson2JsonMessageConverter(mapper);
     }
 
     @Bean
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory,
+    public RabbitTemplate rabbitTemplate(ConnectionFactory cf,
                                          Jackson2JsonMessageConverter converter) {
-        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        RabbitTemplate template = new RabbitTemplate(cf);
         template.setMessageConverter(converter);
         template.setMandatory(true);
         return template;
     }
 
     @Bean
-    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(ConnectionFactory connectionFactory,
-                                                                              Jackson2JsonMessageConverter converter) {
+    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
+            ConnectionFactory cf,
+            Jackson2JsonMessageConverter converter
+    ) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
+        factory.setConnectionFactory(cf);
         factory.setMessageConverter(converter);
         factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         return factory;
     }
 
-    /**
-     * Single source of truth: gateway declares all exchanges/queues/bindings.
-     */
-    @Bean
-    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
-        RabbitAdmin admin = new RabbitAdmin(connectionFactory);
-        admin.setAutoStartup(true);
+    // ---------- RabbitAdmin (AUTO, SAFE) ----------
 
-        declareTopology(admin);
+    @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory cf) {
+        RabbitAdmin admin = new RabbitAdmin(cf);
+        admin.setAutoStartup(true);
+        admin.setIgnoreDeclarationExceptions(true); // 🔑 не падаем при race
         return admin;
     }
 
-    private void declareTopology(RabbitAdmin admin) {
-        AppProperties.Rabbit r = props.getRabbit();
+    // ---------- Exchanges ----------
 
-        DirectExchange notificationExchange = new DirectExchange(r.getExchangeNotification(), true, false);
-        TopicExchange statusExchange = new TopicExchange(r.getExchangeStatus(), true, false);
-        admin.declareExchange(notificationExchange);
-        admin.declareExchange(statusExchange);
-
-        // Main queues
-        Queue emailQueue = new Queue(r.getQueueEmail(), true);
-        Queue telegramQueue = new Queue(r.getQueueTelegram(), true);
-        admin.declareQueue(emailQueue);
-        admin.declareQueue(telegramQueue);
-
-        admin.declareBinding(BindingBuilder.bind(emailQueue).to(notificationExchange).with(r.getRoutingEmail()));
-        admin.declareBinding(BindingBuilder.bind(telegramQueue).to(notificationExchange).with(r.getRoutingTelegram()));
-
-        // Status queue (gateway consumes)
-        Queue statusQueue = new Queue(r.getQueueStatusGateway(), true);
-        admin.declareQueue(statusQueue);
-        admin.declareBinding(BindingBuilder.bind(statusQueue).to(statusExchange).with("status.*"));
-
-        // Retry queues (TTL + DLX back to x.notification)
-        declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingEmail(), r.getEmailRetryQueues(), r.getEmailDlq());
-        declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingTelegram(), r.getTelegramRetryQueues(), r.getTelegramDlq());
+    @Bean
+    public DirectExchange notificationExchange() {
+        return new DirectExchange(
+                props.getRabbit().getExchangeNotification(),
+                true,
+                false
+        );
     }
 
-    private void declareRetryAndDlq(RabbitAdmin admin,
-                                   String deadLetterExchangeName,
-                                   String deadLetterRoutingKey,
-                                   List<String> retryQueueNames,
-                                   String dlqName) {
-        // DLQ
-        if (dlqName != null && !dlqName.isBlank()) {
-            admin.declareQueue(new Queue(dlqName, true));
+    @Bean
+    public TopicExchange statusExchange() {
+        return new TopicExchange(
+                props.getRabbit().getExchangeStatus(),
+                true,
+                false
+        );
+    }
+
+    // ---------- Main Queues ----------
+
+    @Bean
+    public Queue emailQueue() {
+        return new Queue(props.getRabbit().getQueueEmail(), true);
+    }
+
+    @Bean
+    public Queue telegramQueue() {
+        return new Queue(props.getRabbit().getQueueTelegram(), true);
+    }
+
+    @Bean
+    public Queue telegramRegistrationQueue() {
+        return new Queue(props.getRabbit().getQueueTelegramRegistration(), true);
+    }
+
+    @Bean
+    public Queue statusQueueGateway() {
+        return new Queue(props.getRabbit().getQueueStatusGateway(), true);
+    }
+
+    // ---------- Bindings ----------
+
+    @Bean
+    public Binding emailBinding() {
+        return BindingBuilder.bind(emailQueue())
+                .to(notificationExchange())
+                .with(props.getRabbit().getRoutingEmail());
+    }
+
+    @Bean
+    public Binding telegramBinding() {
+        return BindingBuilder.bind(telegramQueue())
+                .to(notificationExchange())
+                .with(props.getRabbit().getRoutingTelegram());
+    }
+
+    @Bean
+    public Binding telegramRegistrationBinding() {
+        return BindingBuilder.bind(telegramRegistrationQueue())
+                .to(notificationExchange())
+                .with(props.getRabbit().getRoutingTelegramRegistration());
+    }
+
+    @Bean
+    public Binding statusBinding() {
+        return BindingBuilder.bind(statusQueueGateway())
+                .to(statusExchange())
+                .with("status.*");
+    }
+
+    // ---------- Retry + DLQ ----------
+
+    @Bean
+    public Declarables emailRetryTopology() {
+        return retryTopology(
+                props.getRabbit().getEmailRetryQueues(),
+                props.getRabbit().getEmailDlq(),
+                props.getRabbit().getRoutingEmail()
+        );
+    }
+
+    @Bean
+    public Declarables telegramRetryTopology() {
+        return retryTopology(
+                props.getRabbit().getTelegramRetryQueues(),
+                props.getRabbit().getTelegramDlq(),
+                props.getRabbit().getRoutingTelegram()
+        );
+    }
+
+    private Declarables retryTopology(
+            List<String> retryQueues,
+            String dlq,
+            String routingKey
+    ) {
+        Map<String, Object> dlqArgs = new HashMap<>();
+        Queue dlqQueue = new Queue(dlq, true, false, false, dlqArgs);
+
+        List<Declarable> declarables = new java.util.ArrayList<>();
+        declarables.add(dlqQueue);
+
+        for (String q : retryQueues) {
+            Map<String, Object> args = new HashMap<>();
+            args.put("x-message-ttl", inferTtlMs(q));
+            args.put("x-dead-letter-exchange", props.getRabbit().getExchangeNotification());
+            args.put("x-dead-letter-routing-key", routingKey);
+
+            declarables.add(new Queue(q, true, false, false, args));
         }
 
-        // Map retry queue name to TTL (based on suffix)
-        for (String qName : retryQueueNames) {
-            if (qName == null || qName.isBlank()) {
-                continue;
-            }
-            long ttlMs = inferTtlMs(qName);
-            Map<String, Object> args = new HashMap<>();
-            args.put("x-message-ttl", ttlMs);
-            args.put("x-dead-letter-exchange", deadLetterExchangeName);
-            args.put("x-dead-letter-routing-key", deadLetterRoutingKey);
-            Queue retryQueue = new Queue(qName, true, false, false, args);
-            admin.declareQueue(retryQueue);
-        }
+        return new Declarables(declarables);
     }
 
     private long inferTtlMs(String qName) {
-        // q.notification.email.retry.15s / 60s / 300s / 900s / 3600s
-        String[] parts = qName.split("\\.");
-        String last = parts[parts.length - 1];
+        String last = qName.substring(qName.lastIndexOf('.') + 1);
         if (last.endsWith("s")) {
-            String num = last.substring(0, last.length() - 1);
             try {
-                long seconds = Long.parseLong(num);
-                return seconds * 1000L;
-            } catch (NumberFormatException ignored) {
-            }
+                return Long.parseLong(last.replace("s", "")) * 1000L;
+            } catch (Exception ignored) {}
         }
         return 15000L;
     }
