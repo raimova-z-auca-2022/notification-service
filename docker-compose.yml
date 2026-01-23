@@ -36,25 +36,25 @@ services:
     networks:
       - ns_net
 
-#  postgres_email:
-#    image: postgres:16
-#    container_name: postgres_email
-#    ports:
-#      - "5434:5432"
-#    environment:
-#      POSTGRES_DB: email_db
-#      POSTGRES_USER: email
-#      POSTGRES_PASSWORD: email_pass
-#    volumes:
-#      - pg_email_data:/var/lib/postgresql/data
-#      - ./email-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U email -d email_db"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#    networks:
-#      - ns_net
+  postgres_email:
+    image: postgres:16
+    container_name: postgres_email
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: email_db
+      POSTGRES_USER: email
+      POSTGRES_PASSWORD: email_pass
+    volumes:
+      - pg_email_data:/var/lib/postgresql/data
+      - ./email-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U email -d email_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ns_net
 
   postgres_telegram:
     image: postgres:16
@@ -113,43 +113,43 @@ services:
     networks:
       - ns_net
 
-#  email-worker:
-#    build:
-#      context: ./email-worker
-#      dockerfile: Dockerfile
-#    container_name: email-worker
-#    depends_on:
-#      rabbitmq:
-#        condition: service_healthy
-#      postgres_email:
-#        condition: service_healthy
-#    environment:
-#      SERVER_PORT: 8081
-#
-#      DB_HOST: postgres_email
-#      DB_PORT: 5432
-#      DB_NAME: email_db
-#      DB_USERNAME: email
-#      DB_PASSWORD: email_pass
-#
-#      RABBIT_HOST: rabbitmq
-#      RABBIT_PORT: 5672
-#      RABBIT_USER: ${RABBITMQ_USER:-guest}
-#      RABBIT_PASS: ${RABBITMQ_PASS:-guest}
-#
-#      QUEUE_IN: "q.notification.email"
-#      EXCHANGE_STATUS: "x.notification.status"
-#      STATUS_ROUTING_KEY: "status.email"
-#
-#      SPRING_MAIL_HOST: smtp.gmail.com
-#      SPRING_MAIL_PORT: 587
-#      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
-#      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
-#
-#      RETRY_MAX_ATTEMPTS: "5"
-#
-#    networks:
-#      - ns_net
+  email-worker:
+    build:
+      context: ./email-worker
+      dockerfile: Dockerfile
+    container_name: email-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres_email:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+
+      DB_HOST: postgres_email
+      DB_PORT: 5432
+      DB_NAME: email_db
+      DB_USERNAME: email
+      DB_PASSWORD: email_pass
+
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: ${RABBITMQ_USER:-guest}
+      RABBIT_PASS: ${RABBITMQ_PASS:-guest}
+
+      QUEUE_IN: "q.notification.email"
+      EXCHANGE_STATUS: "x.notification.status"
+      STATUS_ROUTING_KEY: "status.email"
+
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
+
+      RETRY_MAX_ATTEMPTS: "5"
+
+    networks:
+      - ns_net
 
   telegram-worker:
     build:

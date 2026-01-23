@@ -14,6 +14,7 @@
         <module>notification-gateway</module>
         <module>telegram-worker</module>
         <module>whatsapp-worker</module>
+        <module>email-worker</module>
     </modules>
 
 </project>
