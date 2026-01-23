@@ -11,9 +11,9 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>backend/notification-gateway</module>
-        <module>backend/telegram-worker</module>
-        <module>backend/whatsapp-worker</module>
+        <module>notification-gateway</module>
+        <module>telegram-worker</module>
+        <module>whatsapp-worker</module>
     </modules>
 
 </project>
