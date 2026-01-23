@@ -36,8 +36,10 @@ app:
     exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
     routingEmail: ${ROUTING_EMAIL:email}
     routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
 
     # retry queues must exist; workers will publish to them directly
@@ -57,7 +59,13 @@ app:
       - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
     telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
 
+  telegram:
+    botToken: ${TELEGRAM_BOT_TOKEN}
+    botName: ${TELEGRAM_BOT_NAME:MyCoolNotifier_bot}
+
   idempotency:
     required: ${IDEMPOTENCY_REQUIRED:true}
   publish:
     confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}
+
+

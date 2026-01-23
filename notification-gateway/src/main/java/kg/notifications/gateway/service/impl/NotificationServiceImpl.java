@@ -8,8 +8,8 @@ import kg.notifications.gateway.exception.BadRequestException;
 import kg.notifications.gateway.exception.NotFoundException;
 import kg.notifications.gateway.messaging.NotificationPublisher;
 import kg.notifications.gateway.messaging.dto.NotificationCommandDto;
-import kg.notifications.gateway.repository.NotificationEventRepository;
-import kg.notifications.gateway.repository.NotificationRepository;
+import kg.notifications.gateway.repository.impl.JdbcNotificationEventRepository;
+import kg.notifications.gateway.repository.impl.JdbcNotificationRepository;
 import kg.notifications.gateway.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,8 +22,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
 
-    private final NotificationRepository notificationRepository;
-    private final NotificationEventRepository eventRepository;
+    private final JdbcNotificationRepository notificationRepository;
+    private final JdbcNotificationEventRepository eventRepository;
     private final NotificationPublisher publisher;
     private final AppProperties props;
 

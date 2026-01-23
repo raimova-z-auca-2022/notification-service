@@ -27,7 +27,7 @@ services:
       POSTGRES_PASSWORD: gateway_pass
     volumes:
       - pg_gateway_data:/var/lib/postgresql/data
-      - ./backend/notification-gateway/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./notification-gateway/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gateway -d gateway_db"]
       interval: 10s
@@ -47,7 +47,7 @@ services:
 #      POSTGRES_PASSWORD: email_pass
 #    volumes:
 #      - pg_email_data:/var/lib/postgresql/data
-#      - ./backend/email-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+#      - ./email-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 #    healthcheck:
 #      test: ["CMD-SHELL", "pg_isready -U email -d email_db"]
 #      interval: 10s
@@ -67,7 +67,7 @@ services:
       POSTGRES_PASSWORD: telegram_pass
     volumes:
       - pg_telegram_data:/var/lib/postgresql/data
-      - ./backend/telegram-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./telegram-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U telegram -d telegram_db"]
       interval: 10s
@@ -78,7 +78,7 @@ services:
 
   notification-gateway:
     build:
-      context: ./backend/notification-gateway
+      context: ./notification-gateway
       dockerfile: Dockerfile
     container_name: notification-gateway
     depends_on:
@@ -115,7 +115,7 @@ services:
 
 #  email-worker:
 #    build:
-#      context: ./backend/email-worker
+#      context: ./email-worker
 #      dockerfile: Dockerfile
 #    container_name: email-worker
 #    depends_on:
@@ -153,7 +153,7 @@ services:
 
   telegram-worker:
     build:
-      context: ./backend/telegram-worker
+      context: ./telegram-worker
       dockerfile: Dockerfile
     container_name: telegram-worker
     depends_on:
