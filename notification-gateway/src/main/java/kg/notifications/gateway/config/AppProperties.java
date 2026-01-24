@@ -31,6 +31,12 @@ public class AppProperties {
         private String queueTelegramRegistration;
         private String queueStatusGateway;
 
+        private String exchangeDelayed;
+        private String routingScheduled;
+        private String routingScheduledProcess;
+        private String queueScheduledMessages;
+        private String queueScheduledProcessing;
+
         private List<String> emailRetryQueues = new ArrayList<>();
         private String emailDlq;
 

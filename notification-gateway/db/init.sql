@@ -60,3 +60,34 @@ DROP TRIGGER IF EXISTS trg_notifications_set_updated_at ON notifications;
 CREATE TRIGGER trg_notifications_set_updated_at
 BEFORE UPDATE ON notifications
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- schema.sql
+CREATE TABLE IF NOT EXISTS scheduled_notifications (
+                                                       id VARCHAR(36) PRIMARY KEY,
+    type VARCHAR(50) NOT NULL,
+    recipient VARCHAR(500) NOT NULL,
+    text TEXT NOT NULL,
+    scheduled_at TIMESTAMP NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    sent_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+-- Индексы
+CREATE INDEX IF NOT EXISTS idx_scheduled_status
+    ON scheduled_notifications(status);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_at_status
+    ON scheduled_notifications(scheduled_at, status);
+
+CREATE INDEX IF NOT EXISTS idx_recipient_status
+    ON scheduled_notifications(recipient, status);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_at
+    ON scheduled_notifications(scheduled_at);
+
+-- Ограничения
+ALTER TABLE scheduled_notifications
+    ADD CONSTRAINT chk_status
+        CHECK (status IN ('PENDING', 'SENT', 'CANCELLED', 'FAILED', 'MISSED'));

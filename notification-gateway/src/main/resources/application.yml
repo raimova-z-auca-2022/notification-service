@@ -19,6 +19,10 @@ spring:
     publisher-confirm-type: correlated
     publisher-returns: true
 
+scheduling:
+  enabled: true
+  missed-check-delay: 60000
+
 logging:
   level:
     root: INFO
@@ -34,15 +38,22 @@ app:
   rabbit:
     exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
     exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
+    exchangeDelayed: ${EXCHANGE_DELAYED:x.delayed.exchange}
+
     routingEmail: ${ROUTING_EMAIL:email}
     routingTelegram: ${ROUTING_TELEGRAM:telegram}
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
+    routingScheduled: ${ROUTING_SCHEDULED:message.scheduled}
+    routingScheduledProcess: ${ROUTING_SCHEDULED_PROCESS:scheduled.process}
+
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+    queueScheduledMessages: ${QUEUE_SCHEDULED_MESSAGES:q.scheduled.messages}
+    queueScheduledProcessing: ${QUEUE_SCHEDULED_PROCESSING:q.scheduled.processing}
 
-    # retry queues must exist; workers will publish to them directly
+
     emailRetryQueues:
       - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
       - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
@@ -58,6 +69,7 @@ app:
       - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
       - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
     telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
+
 
   telegram:
     botToken: ${TELEGRAM_BOT_TOKEN}

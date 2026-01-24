@@ -79,6 +79,20 @@ public class RabbitConfig {
         );
     }
 
+    // ---------- Delayed Exchange для отложенных сообщений ----------
+    @Bean
+    public CustomExchange delayedExchange() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-delayed-type", "direct");
+        return new CustomExchange(
+                props.getRabbit().getExchangeDelayed(),
+                "x-delayed-message",
+                true,
+                false,
+                args
+        );
+    }
+
     // ---------- Main Queues ----------
 
     @Bean
@@ -99,6 +113,17 @@ public class RabbitConfig {
     @Bean
     public Queue statusQueueGateway() {
         return new Queue(props.getRabbit().getQueueStatusGateway(), true);
+    }
+
+    // ← НОВЫЕ очереди для запланированных сообщений →
+    @Bean
+    public Queue scheduledMessagesQueue() {
+        return new Queue(props.getRabbit().getQueueScheduledMessages(), true);
+    }
+
+    @Bean
+    public Queue scheduledProcessingQueue() {
+        return new Queue(props.getRabbit().getQueueScheduledProcessing(), true);
     }
 
     // ---------- Bindings ----------
@@ -129,6 +154,22 @@ public class RabbitConfig {
         return BindingBuilder.bind(statusQueueGateway())
                 .to(statusExchange())
                 .with("status.*");
+    }
+
+    // ← НОВЫЕ bindings для запланированных сообщений →
+    @Bean
+    public Binding scheduledMessagesBinding() {
+        return BindingBuilder.bind(scheduledMessagesQueue())
+                .to(delayedExchange())
+                .with(props.getRabbit().getRoutingScheduled())
+                .noargs();
+    }
+
+    @Bean
+    public Binding scheduledProcessingBinding() {
+        return BindingBuilder.bind(scheduledProcessingQueue())
+                .to(notificationExchange())
+                .with(props.getRabbit().getRoutingScheduledProcess());
     }
 
     // ---------- Retry + DLQ ----------
@@ -183,4 +224,5 @@ public class RabbitConfig {
         }
         return 15000L;
     }
+
 }
