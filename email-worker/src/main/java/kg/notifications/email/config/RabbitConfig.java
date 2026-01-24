@@ -8,40 +8,48 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @Configuration
 @RequiredArgsConstructor
 public class RabbitConfig {
 
     private final AppProperties appProperties;
 
-    // --- Конвертер сообщений ---
     @Bean
     public Jackson2JsonMessageConverter messageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 
-    // --- RabbitTemplate для отправки сообщений ---
     @Bean
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
-        template.setMandatory(true); // важно для уведомления о недоставке
+        template.setMandatory(true);
         return template;
     }
 
     @Bean
     public DirectExchange notificationExchange() {
-        // true = durable
         return new DirectExchange(appProperties.getRabbit().getExchangeNotification(), true, false);
     }
 
-    // --- Очереди ---
+    @Bean
+    public TopicExchange statusExchange() {
+        return new TopicExchange(
+                appProperties.getRabbit().getExchangeStatus(),
+                true,
+                false
+        );
+    }
+
     @Bean
     public Queue emailQueue() {
         return new Queue(appProperties.getRabbit().getQueueEmail(), true);
     }
 
-    // --- Привязка очереди к обменнику ---
     @Bean
     public Binding emailBinding(Queue emailQueue, DirectExchange notificationExchange) {
         return BindingBuilder.bind(emailQueue)
@@ -49,6 +57,45 @@ public class RabbitConfig {
                 .with(appProperties.getRabbit().getRoutingEmail());
     }
 
-    // --- Опционально: DLQ и retry (как в Gateway) ---
-    // Если нужны повторные попытки и DLQ, можно добавить здесь Declarables, TTL и dead-letter
+    @Bean
+    public Declarables emailRetryTopology() {
+        return retryTopology(
+                appProperties.getRabbit().getEmailRetryQueues(),
+                appProperties.getRabbit().getEmailDlq(),
+                appProperties.getRabbit().getRoutingEmail()
+        );
+    }
+
+    private Declarables retryTopology(
+            List<String> retryQueues,
+            String dlq,
+            String routingKey
+    ) {
+        Map<String, Object> dlqArgs = new HashMap<>();
+        Queue dlqQueue = new Queue(dlq, true, false, false, dlqArgs);
+
+        List<Declarable> declarables = new java.util.ArrayList<>();
+        declarables.add(dlqQueue);
+
+        for (String q : retryQueues) {
+            Map<String, Object> args = new HashMap<>();
+            args.put("x-message-ttl", inferTtlMs(q));
+            args.put("x-dead-letter-exchange", appProperties.getRabbit().getExchangeNotification());
+            args.put("x-dead-letter-routing-key", routingKey);
+
+            declarables.add(new Queue(q, true, false, false, args));
+        }
+
+        return new Declarables(declarables);
+    }
+
+    private long inferTtlMs(String qName) {
+        String last = qName.substring(qName.lastIndexOf('.') + 1);
+        if (last.endsWith("s")) {
+            try {
+                return Long.parseLong(last.replace("s", "")) * 1000L;
+            } catch (Exception ignored) {}
+        }
+        return 15000L;
+    }
 }

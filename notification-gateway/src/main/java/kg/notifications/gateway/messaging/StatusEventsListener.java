@@ -17,10 +17,13 @@ public class StatusEventsListener {
 
     private final NotificationStatusService statusService;
 
-    @RabbitListener(queues = "${app.rabbit.queueStatusGateway}", containerFactory = "rabbitListenerContainerFactory")
+    @RabbitListener(queues = "${app.rabbit.queueStatusGateway}",
+            containerFactory = "rabbitListenerContainerFactory")
     public void onStatus(StatusEventDto evt,
                          Channel channel,
-                         @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException {
+                         @Header(AmqpHeaders.DELIVERY_TAG) long tag,
+                         @Header(name = AmqpHeaders.CORRELATION_ID, required = false
+                         ) String correlationId) throws IOException {
         try {
             statusService.handleStatusEvent(evt);
             channel.basicAck(tag, false);

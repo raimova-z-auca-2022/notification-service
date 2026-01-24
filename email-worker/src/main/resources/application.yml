@@ -31,8 +31,16 @@ spring:
 app:
   rabbit:
     exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
     routingEmail: ${ROUTING_EMAIL:email}
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
+    emailRetryQueues:
+      - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
+      - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
+      - ${EMAIL_RETRY_Q3:q.notification.email.retry.300s}
+      - ${EMAIL_RETRY_Q4:q.notification.email.retry.900s}
+      - ${EMAIL_RETRY_Q5:q.notification.email.retry.3600s}
+    emailDlq: ${EMAIL_DLQ:q.notification.email.dlq}
 
 retry:
   max-attempts: ${RETRY_MAX_ATTEMPTS:5}

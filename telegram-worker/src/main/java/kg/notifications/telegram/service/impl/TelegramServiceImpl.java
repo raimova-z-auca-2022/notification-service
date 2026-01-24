@@ -3,6 +3,7 @@ package kg.notifications.telegram.service.impl;
 import kg.notifications.telegram.config.AppProperties;
 import kg.notifications.telegram.dto.NotificationCommandDto;
 import kg.notifications.telegram.dto.RegistrationCommandDto;
+import kg.notifications.telegram.messaging.StatusEventPublisher;
 import kg.notifications.telegram.model.RegistrationRequest;
 import kg.notifications.telegram.model.TelegramUser;
 import kg.notifications.telegram.repository.RegistrationRequestRepository;
@@ -28,22 +29,25 @@ import java.util.Optional;
 
 @Service
 @Slf4j
-public class TelegramBotServiceImpl
+public class TelegramServiceImpl
         extends TelegramLongPollingBot
         implements TelegramService {
 
     private final AppProperties appProperties;
     private final JdbcTelegramUserRepository userRepo;
     private final RegistrationRequestRepository registrationRepo;
+    private final StatusEventPublisher statusPublisher;
 
 
-    public TelegramBotServiceImpl(AppProperties appProperties,
-                                  RegistrationRequestRepository registrationRepo,
-                                  JdbcTelegramUserRepository userRepo) {
+    public TelegramServiceImpl(AppProperties appProperties,
+                               RegistrationRequestRepository registrationRepo,
+                               JdbcTelegramUserRepository userRepo,
+                               StatusEventPublisher statusPublisher) {
         super(new DefaultBotOptions());
         this.appProperties = appProperties;
         this.registrationRepo = registrationRepo;
         this.userRepo = userRepo;
+        this.statusPublisher = statusPublisher;
     }
 
     @Override
@@ -88,11 +92,14 @@ public class TelegramBotServiceImpl
 
     @Override
     public void sendNotification(NotificationCommandDto dto) {
+        statusPublisher.publishProcessing(dto);
+
         String normalizedPhone = normalizePhone(dto.recipient());
 
         List<TelegramUser> users = userRepo.findAllByPhoneNumber(normalizedPhone);
 
         if (users.isEmpty()) {
+//            statusPublisher.publishFailed(dto, "TELEGRAM_SEND_ERROR", e.getMessage());
             log.warn(
                     "Notification {} skipped: no Telegram user for phone {}",
                     dto.notificationId(),
@@ -104,7 +111,9 @@ public class TelegramBotServiceImpl
         for (TelegramUser user : users) {
             try {
                 execute(new SendMessage(user.getChatId().toString(), dto.text()));
+                statusPublisher.publishSent(dto, null);
             } catch (TelegramApiException e) {
+                statusPublisher.publishFailed(dto, "TELEGRAM_SEND_ERROR", e.getMessage());
                 log.error("Failed to send notification {}", dto.notificationId(), e);
             }
         }

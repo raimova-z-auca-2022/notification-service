@@ -7,7 +7,7 @@ import kg.notifications.gateway.dto.NotificationResponse;
 import kg.notifications.gateway.exception.BadRequestException;
 import kg.notifications.gateway.exception.NotFoundException;
 import kg.notifications.gateway.messaging.NotificationPublisher;
-import kg.notifications.gateway.messaging.dto.NotificationCommandDto;
+import kg.notifications.gateway.dto.NotificationCommandDto;
 import kg.notifications.gateway.repository.impl.JdbcNotificationEventRepository;
 import kg.notifications.gateway.repository.impl.JdbcNotificationRepository;
 import kg.notifications.gateway.service.NotificationService;

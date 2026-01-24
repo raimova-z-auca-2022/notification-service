@@ -1,8 +1,7 @@
 package kg.notifications.telegram.config;
 
-import kg.notifications.telegram.service.TelegramService;
 import jakarta.annotation.PostConstruct;
-import kg.notifications.telegram.service.impl.TelegramBotServiceImpl;
+import kg.notifications.telegram.service.impl.TelegramServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
@@ -12,9 +11,9 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 @Configuration
 public class TelegramBotConfig {
 
-    private final TelegramBotServiceImpl telegramBotService;
+    private final TelegramServiceImpl telegramBotService;
 
-    public TelegramBotConfig(TelegramBotServiceImpl telegramBotService) {
+    public TelegramBotConfig(TelegramServiceImpl telegramBotService) {
         this.telegramBotService = telegramBotService;
     }
 

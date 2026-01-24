@@ -19,7 +19,7 @@ public class AppProperties {
     @Data
     public static class Rabbit {
         private String exchangeNotification;
-        // private String exchangeStatus; // Можно добавить, если воркер шлет статусы
+        private String exchangeStatus;
 
         private String routingTelegram;
         private String routingTelegramRegistration;
@@ -27,7 +27,7 @@ public class AppProperties {
         private String queueTelegram;
         private String queueTelegramRegistration;
 
-        // Для DLQ и Retry (если используем)
+
         private List<String> telegramRetryQueues = new ArrayList<>();
         private String telegramDlq;
     }

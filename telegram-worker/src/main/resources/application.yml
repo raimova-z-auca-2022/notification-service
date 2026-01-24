@@ -17,16 +17,24 @@ spring:
     listener:
       simple:
         missing-queues-fatal: false
+        acknowledge-mode: manual
 
 app:
   rabbit:
     exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
-
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
     routingTelegram: ${ROUTING_TELEGRAM:telegram}
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
-
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
+
+    telegramRetryQueues:
+      - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}
+      - ${TG_RETRY_Q2:q.notification.telegram.retry.60s}
+      - ${TG_RETRY_Q3:q.notification.telegram.retry.300s}
+      - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
+      - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
+    telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
 
   telegram:
     botToken: ${TELEGRAM_BOT_TOKEN}

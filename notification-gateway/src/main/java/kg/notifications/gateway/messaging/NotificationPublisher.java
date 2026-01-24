@@ -2,13 +2,12 @@ package kg.notifications.gateway.messaging;
 
 import kg.notifications.gateway.config.AppProperties;
 import kg.notifications.gateway.dto.NotificationType;
-import kg.notifications.gateway.messaging.dto.NotificationCommandDto;
+import kg.notifications.gateway.dto.NotificationCommandDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -28,6 +27,7 @@ public class NotificationPublisher {
                 dto,
                 message -> {
                     message.getMessageProperties().setContentType("application/json");
+                    message.getMessageProperties().setCorrelationId(dto.notificationId());
                     return message;
                 },
                 correlationData
