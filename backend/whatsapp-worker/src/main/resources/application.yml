@@ -3,10 +3,10 @@ spring:
     name: whatsapp-worker
 
   rabbitmq:
-    host: ${RABBIT_HOST:rabbitmq}
+    host: ${RABBIT_HOST:localhost}
     port: ${RABBIT_PORT:5672}
-    username: ${RABBIT_USER:admin}
-    password: ${RABBIT_PASS:admin123}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
     listener:
       simple:
         acknowledge-mode: manual
@@ -14,49 +14,35 @@ spring:
         retry:
           enabled: false
 
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:postgres_whatsapp}:${DB_PORT:5432}/${DB_NAME:whatsapp_db}
-    username: ${DB_USERNAME:whatsapp}
-    password: ${DB_PASSWORD:whatsapp_pass}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-    show-sql: ${SHOW_SQL:false}
-
 server:
   port: ${SERVER_PORT:8081}
 
 app:
   whatsapp:
     api:
-      base-url: ${WHATSAPP_API_URL:https://api.example.com}
-      token: ${WHATSAPP_API_TOKEN:test-token}
-      timeout-ms: ${WHATSAPP_API_TIMEOUT_MS:30000}
-      max-retries: ${WHATSAPP_MAX_RETRIES:3}
+      # Twilio WhatsApp API URL
+      base-url: https://api.twilio.com/2010-04-01/Accounts/AC4a0e9d8445e0e4ab389e984268d2af83/Messages.json
+
+      # ВАШ ПРАВИЛЬНЫЙ ТОКЕН (тот что вы сгенерировали):
+      token: Basic QUM0YTBlOWQ4NDQ1ZTBlNGFiMzg5ZTk4NDI2OGQyYWY4Mzo5OTFkMjQ1YWYzYjc0NGU1MzRjYWU5YzJlYWU0ZDNhYg==
+      from-number: "whatsapp:+14155238886"  # ← ДОБАВЬТЕ ЭТО
+      timeout-ms: 30000
+      max-retries: 3
+
     queue:
-      name: ${QUEUE_IN:ns.whatsapp.q}
-      dlq: ${QUEUE_DLQ:ns.whatsapp.dlq}
+      name: q.notification.whatsapp  # ← должно совпадать с именем очереди
+      dlq: ns.whatsapp.dlq
+
     retry:
-      delays: ${RETRY_DELAYS:1s,5s,15s,1m,5m}
+      delays: [ "5s", "30s", "60s", "300s", "900s" ]
 
 logging:
   level:
     root: INFO
-    kg.notifications.whatsapp: ${LOG_LEVEL_WHATSAPP:DEBUG}
-    org.springframework.amqp: ${LOG_LEVEL_AMQP:INFO}
-    org.springframework.web.client: ${LOG_LEVEL_WEB_CLIENT:DEBUG}
+    kg.notifications.whatsapp: DEBUG
+    org.springframework.amqp: INFO
+    org.springframework.web.client: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
   file:
     name: logs/whatsapp-worker.log

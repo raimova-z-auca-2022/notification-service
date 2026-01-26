@@ -2,110 +2,82 @@ package kg.notifications.whatsapp.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
-import kg.notifications.whatsapp.config.AppProperties;
+import kg.notifications.gateway.dto.NotificationStatus;
+import kg.notifications.gateway.dto.NotificationType;
+import kg.notifications.gateway.messaging.dto.StatusEventDto;
 import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
-import kg.notifications.whatsapp.exception.InvalidMessageException;
-import kg.notifications.whatsapp.exception.WhatsAppApiException;
 import kg.notifications.whatsapp.service.DLQService;
-import kg.notifications.whatsapp.service.NotificationStatusService;
-import kg.notifications.whatsapp.service.RetryService;
 import kg.notifications.whatsapp.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.support.AmqpHeaders;
-import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class WhatsAppNotificationListener {
 
-    private final WhatsAppService whatsAppService;
-    private final RetryService retryService;
-    private final DLQService dlqService;
-    private final NotificationStatusService statusService;
-    private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
+    private final WhatsAppService whatsAppService;
+    private final DLQService dlqService;
+    private final RabbitTemplate rabbitTemplate; // Добавили для отправки статуса
 
-    @RabbitListener(
-            queues = "${app.whatsapp.queue.name}",
-            containerFactory = "rabbitListenerContainerFactory"
-    )
-    public void processNotification(
-            Message amqpMessage,
-            Channel channel,
-            @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag,
-            @Header(value = "x-retry-count", required = false, defaultValue = "0") int retryCount
-    ) throws IOException {
-
-        WhatsAppNotificationMessage message = null;
+    @RabbitListener(queues = "${app.whatsapp.queue.name}", containerFactory = "rabbitListenerContainerFactory")
+    public void onMessage(Message amqpMessage, Channel channel) throws IOException {
+        long deliveryTag = amqpMessage.getMessageProperties().getDeliveryTag();
+        String payload = new String(amqpMessage.getBody(), StandardCharsets.UTF_8);
 
         try {
-            message = objectMapper.readValue(amqpMessage.getBody(), WhatsAppNotificationMessage.class);
-
-            if (message == null) {
-                throw new IllegalArgumentException("Message body is null");
+            String json = payload;
+            if (json.startsWith("\"") && json.endsWith("\"")) {
+                json = objectMapper.readValue(json, String.class);
             }
 
-            message.setRetryCount(retryCount);
+            WhatsAppNotificationMessage message = objectMapper.readValue(json, WhatsAppNotificationMessage.class);
+            log.info("Processing WhatsApp notification [ID: {}, Recipient: {}]", message.getNotificationId(), message.getRecipient());
 
-            log.info("Processing WhatsApp notification [ID: {}, Retry: {}]",
-                    message.getNotificationId(), retryCount);
-
-            statusService.sendProcessingStatus(message);
-
+            // 1. Отправляем сообщение
             whatsAppService.sendMessage(message);
 
+            // 2. Отправляем статус SENT обратно в гейтвей
+            sendStatusUpdate(message.getNotificationId().toString(), NotificationStatus.SENT, null, null);
+
             channel.basicAck(deliveryTag, false);
-
-            log.info("Successfully processed notification: {}",
-                    message.getNotificationId());
-
-        } catch (IllegalArgumentException | InvalidMessageException e) {
-            log.error("Invalid message format: {}", e.getMessage());
-            channel.basicNack(deliveryTag, false, false);
-
-            if (message != null) {
-                dlqService.sendToDLQ(message, "INVALID_FORMAT: " + e.getMessage());
-                statusService.sendErrorStatus(message, e.getMessage());
-            }
-
-        } catch (WhatsAppApiException e) {
-            log.error("WhatsApp API error: {}", e.getMessage());
-
-            if (e.isRetryable() && retryCount < appProperties.getApi().getMaxRetries()) {
-                channel.basicNack(deliveryTag, false, false);
-                retryService.scheduleRetry(amqpMessage, message, retryCount + 1);
-                statusService.sendErrorStatus(message, "Retry scheduled: " + e.getMessage());
-
-                log.info("Scheduled retry {}/{} for notification {}",
-                        retryCount + 1, appProperties.getApi().getMaxRetries(),
-                        message.getNotificationId());
-            } else {
-                channel.basicNack(deliveryTag, false, false);
-                dlqService.sendToDLQ(message,
-                        String.format("API_ERROR: %s (retries: %d)",
-                                e.getMessage(), retryCount));
-                statusService.sendErrorStatus(message, e.getMessage());
-
-                log.warn("Sent to DLQ after {} retries: {}",
-                        retryCount, message.getNotificationId());
-            }
-
         } catch (Exception e) {
-            log.error("Unexpected error processing message: {}", e.getMessage(), e);
-            channel.basicNack(deliveryTag, false, false);
+            log.error("Failed to process message: {}", e.getMessage());
 
-            if (message != null) {
-                dlqService.sendToDLQ(message,
-                        String.format("UNEXPECTED_ERROR: %s", e.getMessage()));
-                statusService.sendErrorStatus(message, e.getMessage());
-            }
+            // Если ошибка — отправляем статус FAILED
+            try {
+                var node = objectMapper.readTree(payload);
+                String id = node.has("notificationId") ? node.get("notificationId").asText() : UUID.randomUUID().toString();
+                sendStatusUpdate(id, NotificationStatus.FAILED, "ERR_500", e.getMessage());
+            } catch (Exception ignored) {}
+
+            channel.basicAck(deliveryTag, false);
         }
+    }
+
+    private void sendStatusUpdate(String id, NotificationStatus status, String errCode, String errMsg) {
+        StatusEventDto event = new StatusEventDto(
+                id,
+                NotificationType.WHATSAPP,
+                status,
+                1,
+                errCode,
+                errMsg,
+                null,
+                OffsetDateTime.now()
+        );
+        // Отправляем в exchange x.status с ключом status.updates
+        rabbitTemplate.convertAndSend("x.status", "status.updates", event);
+        log.info("Status update sent to Gateway: {} for ID: {}", status, id);
     }
 }

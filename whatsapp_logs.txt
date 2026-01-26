@@ -1,0 +1,67 @@
+whatsapp-worker  | 
+whatsapp-worker  |   .   ____          _            __ _ _
+whatsapp-worker  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+whatsapp-worker  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+whatsapp-worker  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+whatsapp-worker  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+whatsapp-worker  |  =========|_|==============|___/=/_/_/_/
+whatsapp-worker  |  :: Spring Boot ::                (v3.2.5)
+whatsapp-worker  | 
+whatsapp-worker  | 2026-01-24 04:15:01 - INFO  [main] k.n.whatsapp.WhatsAppApplication - Starting WhatsAppApplication v0.0.1-SNAPSHOT using Java 17.0.17 with PID 1 (/app/app.jar started by root in /app)
+whatsapp-worker  | 2026-01-24 04:15:01 - DEBUG [main] k.n.whatsapp.WhatsAppApplication - Running with Spring Boot v3.2.5, Spring v6.1.6
+whatsapp-worker  | 2026-01-24 04:15:01 - INFO  [main] k.n.whatsapp.WhatsAppApplication - No active profile set, falling back to 1 default profile: "default"
+whatsapp-worker  | 2026-01-24 04:15:05 - INFO  [main] o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8083 (http)
+whatsapp-worker  | 2026-01-24 04:15:05 - INFO  [main] o.a.catalina.core.StandardService - Starting service [Tomcat]
+whatsapp-worker  | 2026-01-24 04:15:05 - INFO  [main] o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.20]
+whatsapp-worker  | 2026-01-24 04:15:05 - INFO  [main] o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+whatsapp-worker  | 2026-01-24 04:15:05 - INFO  [main] o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 4210 ms
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [main] o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8083 (http) with context path ''
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [main] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [main] o.s.a.r.l.SimpleMessageListenerContainer - Broker not available; cannot force queue declarations during start: java.net.ConnectException: Connection refused
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-1] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:09 - ERROR [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer - Failed to check/redeclare auto-delete queue(s).
+whatsapp-worker  | org.springframework.amqp.AmqpConnectException: java.net.ConnectException: Connection refused
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.support.RabbitExceptionTranslator.convertRabbitAccessException(RabbitExceptionTranslator.java:61)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.createBareConnection(AbstractConnectionFactory.java:622)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.CachingConnectionFactory.createConnection(CachingConnectionFactory.java:727)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.ConnectionFactoryUtils.createConnection(ConnectionFactoryUtils.java:257)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.core.RabbitTemplate.doExecute(RabbitTemplate.java:2249)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.core.RabbitTemplate.execute(RabbitTemplate.java:2222)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.core.RabbitTemplate.execute(RabbitTemplate.java:2202)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.core.RabbitAdmin.getQueueInfo(RabbitAdmin.java:467)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.core.RabbitAdmin.getQueueProperties(RabbitAdmin.java:451)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer.attemptDeclarations(AbstractMessageListenerContainer.java:1960)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer.redeclareElementsIfNecessary(AbstractMessageListenerContainer.java:1924)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer$AsyncMessageProcessingConsumer.initialize(SimpleMessageListenerContainer.java:1478)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer$AsyncMessageProcessingConsumer.run(SimpleMessageListenerContainer.java:1320)
+whatsapp-worker  | 	at java.base/java.lang.Thread.run(Thread.java:840)
+whatsapp-worker  | Caused by: java.net.ConnectException: Connection refused
+whatsapp-worker  | 	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+whatsapp-worker  | 	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+whatsapp-worker  | 	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+whatsapp-worker  | 	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+whatsapp-worker  | 	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+whatsapp-worker  | 	at java.base/java.net.Socket.connect(Socket.java:633)
+whatsapp-worker  | 	at com.rabbitmq.client.impl.SocketFrameHandlerFactory.create(SocketFrameHandlerFactory.java:61)
+whatsapp-worker  | 	at com.rabbitmq.client.ConnectionFactory.newConnection(ConnectionFactory.java:1249)
+whatsapp-worker  | 	at com.rabbitmq.client.ConnectionFactory.newConnection(ConnectionFactory.java:1198)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.connectAddresses(AbstractConnectionFactory.java:668)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.connect(AbstractConnectionFactory.java:637)
+whatsapp-worker  | 	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.createBareConnection(AbstractConnectionFactory.java:584)
+whatsapp-worker  | 	... 12 common frames omitted
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-1] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:09 - INFO  [main] k.n.whatsapp.WhatsAppApplication - Started WhatsAppApplication in 10.938 seconds (process running for 13.223)
+whatsapp-worker  | 2026-01-24 04:15:14 - WARN  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer - Consumer raised exception, processing can restart if the connection factory supports it. Exception summary: org.springframework.amqp.AmqpConnectException: java.net.ConnectException: Connection refused
+whatsapp-worker  | 2026-01-24 04:15:14 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer - Restarting Consumer@316cda31: tags=[[]], channel=null, acknowledgeMode=MANUAL local queue size=0
+whatsapp-worker  | 2026-01-24 04:15:14 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-2] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:14 - ERROR [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer - Failed to check/redeclare auto-delete queue(s).
+whatsapp-worker  | 2026-01-24 04:15:14 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-2] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:19 - WARN  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer - Consumer raised exception, processing can restart if the connection factory supports it. Exception summary: org.springframework.amqp.AmqpConnectException: java.net.ConnectException: Connection refused
+whatsapp-worker  | 2026-01-24 04:15:19 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer - Restarting Consumer@7c8b926e: tags=[[]], channel=null, acknowledgeMode=MANUAL local queue size=0
+whatsapp-worker  | 2026-01-24 04:15:19 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [rabbitmq:5672]
+whatsapp-worker  | 2026-01-24 04:15:19 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] o.s.a.r.c.CachingConnectionFactory - Created new connection: rabbitConnectionFactory#3d1f558a:5/SimpleConnection@14f1aa05 [delegate=amqp://guest@172.18.0.2:5672/, localPort=58222]
+whatsapp-worker  | 2026-01-24 04:16:31 - INFO  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] k.n.w.l.WhatsAppNotificationListener - Processing WhatsApp notification [ID: 123e4567-e89b-12d3-a456-426614174000, Retry: 0]
+whatsapp-worker  | 2026-01-24 04:16:31 - DEBUG [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] k.n.w.s.i.NotificationStatusServiceImpl - Status event sent: PROCESSING
+whatsapp-worker  | 2026-01-24 04:16:31 - ERROR [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] k.n.w.l.WhatsAppNotificationListener - Invalid message format: Invalid WhatsApp message: message is required; 
+whatsapp-worker  | 2026-01-24 04:16:31 - WARN  [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] k.n.w.service.impl.DLQServiceImpl - Message sent to DLQ: 123e4567-e89b-12d3-a456-426614174000 - Reason: INVALID_FORMAT: Invalid WhatsApp message: message is required; 
+whatsapp-worker  | 2026-01-24 04:16:31 - DEBUG [org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#0-3] k.n.w.s.i.NotificationStatusServiceImpl - Status event sent: FAILED

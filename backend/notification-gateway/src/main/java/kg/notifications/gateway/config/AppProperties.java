@@ -23,6 +23,7 @@ public class AppProperties {
 
         private String routingEmail;
         private String routingTelegram;
+        private String routingWhatsapp = "whatsapp"; // ДОБАВЛЕНО
 
         private String queueEmail;
         private String queueTelegram;
@@ -33,6 +34,9 @@ public class AppProperties {
 
         private List<String> telegramRetryQueues = new ArrayList<>();
         private String telegramDlq;
+
+        private List<String> whatsappRetryQueues = new ArrayList<>(); // ДОБАВЛЕНО
+        private String whatsappDlq; // ДОБАВЛЕНО
     }
 
     @Data

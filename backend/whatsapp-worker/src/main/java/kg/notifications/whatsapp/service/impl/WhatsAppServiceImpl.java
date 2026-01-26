@@ -1,23 +1,25 @@
 package kg.notifications.whatsapp.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kg.notifications.whatsapp.config.AppProperties;
-import kg.notifications.whatsapp.dto.WhatsAppApiResponse;
 import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
 import kg.notifications.whatsapp.exception.InvalidMessageException;
 import kg.notifications.whatsapp.exception.WhatsAppApiException;
+import kg.notifications.whatsapp.service.NotificationStatusService;
 import kg.notifications.whatsapp.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -25,28 +27,26 @@ import java.util.Map;
 public class WhatsAppServiceImpl implements WhatsAppService {
 
     private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
+    private final AppProperties props;
+    private final ObjectMapper objectMapper;
+    private final NotificationStatusService statusService;
 
     @Override
     public void sendMessage(WhatsAppNotificationMessage message) {
-        validateMessage(message);
+        log.debug("Starting WhatsApp send process for notification: {}", message.getNotificationId());
 
         try {
-            log.info("Sending WhatsApp message to {}: {}",
-                    message.getMaskedRecipient(),
-                    message.getNotificationId());
+            validateMessage(message);
 
             HttpHeaders headers = createHeaders();
-            Object requestBody = createRequestBody(message);
-            HttpEntity<Object> request = new HttpEntity<>(requestBody, headers);
+            MultiValueMap<String, String> body = createRequestBody(message);
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            String apiUrl = appProperties.getApi().getBaseUrl() + "/messages";
-
-            ResponseEntity<WhatsAppApiResponse> response = restTemplate.exchange(
-                    apiUrl,
-                    HttpMethod.POST,
+            log.info("Sending WhatsApp message via Twilio to {}", message.getRecipient());
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    props.getApi().getBaseUrl(),
                     request,
-                    WhatsAppApiResponse.class
+                    String.class
             );
 
             handleResponse(message, response);
@@ -57,155 +57,95 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             handleServerError(message, e);
         } catch (ResourceAccessException e) {
             handleNetworkError(message, e);
+        } catch (InvalidMessageException e) {
+            log.error("Validation failed for notification {}: {}", message.getNotificationId(), e.getMessage());
+            throw e;
         } catch (Exception e) {
             handleUnexpectedError(message, e);
         }
     }
 
     private void validateMessage(WhatsAppNotificationMessage message) {
-        if (!message.isValid()) {
-            throw new InvalidMessageException(
-                    "Invalid WhatsApp message: " + message.getValidationErrors());
-        }
-
         String phone = message.getRecipient();
-        if (!phone.startsWith("+")) {
-            throw new InvalidMessageException(
-                    "Phone number must be in E.164 format (start with +): " + phone);
+        if (phone == null || phone.isBlank()) {
+            throw new InvalidMessageException("Recipient phone is required");
         }
-
-        if (phone.length() < 10 || phone.length() > 15) {
-            throw new InvalidMessageException(
-                    "Phone number length invalid: " + phone.length());
+        if (!phone.startsWith("+")) {
+            throw new InvalidMessageException("Phone number must be in E.164 format: " + phone);
         }
     }
 
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", props.getApi().getToken());
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        headers.setBearerAuth(appProperties.getApi().getToken());
         return headers;
     }
 
-    private Object createRequestBody(WhatsAppNotificationMessage message) {
-        if (message.getTemplateId() != null) {
-            return createTemplateRequestBody(message);
-        } else {
-            return createTextRequestBody(message);
-        }
-    }
+    private MultiValueMap<String, String> createRequestBody(WhatsAppNotificationMessage message) {
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 
-    private Map<String, Object> createTextRequestBody(WhatsAppNotificationMessage message) {
-        return Map.of(
-                "to", message.getRecipient(),
-                "type", "text",
-                "text", Map.of(
-                        "body", message.getMessage(),
-                        "preview_url", false
-                )
-        );
-    }
-
-    private Map<String, Object> createTemplateRequestBody(WhatsAppNotificationMessage message) {
-        Map<String, Object> template = Map.of(
-                "name", message.getTemplateId(),
-                "language", Map.of("code", "ru"),
-                "components", createTemplateComponents(message)
-        );
-
-        return Map.of(
-                "to", message.getRecipient(),
-                "type", "template",
-                "template", template
-        );
-    }
-
-    private List<Map<String, Object>> createTemplateComponents(WhatsAppNotificationMessage message) {
-        if (message.getTemplateVariables() == null ||
-                message.getTemplateVariables().isEmpty()) {
-            return Collections.emptyList();
+        String fromNumber = props.getApi().getFromNumber();
+        if (fromNumber == null || fromNumber.isBlank()) {
+            throw new InvalidMessageException("WhatsApp FROM number is not configured in application.yml");
         }
 
-        return List.of(
-                Map.of(
-                        "type", "body",
-                        "parameters", message.getTemplateVariables().entrySet().stream()
-                                .map(entry -> Map.of(
-                                        "type", "text",
-                                        "text", entry.getValue()
-                                ))
-                                .toList()
-                )
-        );
+        body.add("From", fromNumber);
+        body.add("To", ensureWhatsappPrefix(message.getRecipient()));
+        // ВНИМАНИЕ: Если в DTO поле называется message, используйте getMessage()
+        body.add("Body", message.getMessage());
+        return body;
     }
 
-    private void handleResponse(WhatsAppNotificationMessage message,
-                                ResponseEntity<WhatsAppApiResponse> response) {
-        WhatsAppApiResponse apiResponse = response.getBody();
-
-        if (response.getStatusCode().is2xxSuccessful() &&
-                apiResponse != null &&
-                apiResponse.isSuccess()) {
-
-            log.info("WhatsApp message sent successfully: {} [Message ID: {}]",
-                    message.getNotificationId(),
-                    apiResponse.getMessageId());
-
+    private void handleResponse(WhatsAppNotificationMessage message, ResponseEntity<String> response) {
+        if (response.getStatusCode().is2xxSuccessful()) {
+            String sid = extractMessageId(response.getBody());
+            log.info("Successfully sent notification {} to Twilio. SID: {}", message.getNotificationId(), sid);
+            statusService.sendSuccessStatus(message, sid);
         } else {
-            String errorMsg = apiResponse != null ?
-                    apiResponse.getErrorMessage() : "Unknown API error";
             throw new WhatsAppApiException(
-                    "WhatsApp API returned error: " + errorMsg,
-                    false
+                    "Twilio API returned non-success: " + response.getStatusCode(),
+                    response.getStatusCode().is5xxServerError()
             );
         }
     }
 
-    private void handleClientError(WhatsAppNotificationMessage message,
-                                   HttpClientErrorException e) {
-        log.error("WhatsApp API client error ({}): {} for notification {}",
-                e.getStatusCode(),
-                e.getMessage(),
-                message.getNotificationId());
-        throw new WhatsAppApiException(
-                "Client error: " + e.getStatusCode() + " - " + e.getMessage(),
-                false
-        );
+    private String extractMessageId(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            return root.path("sid").asText("unknown");
+        } catch (Exception e) {
+            log.warn("Could not parse Twilio response JSON: {}", e.getMessage());
+            return "unknown";
+        }
     }
 
-    private void handleServerError(WhatsAppNotificationMessage message,
-                                   HttpServerErrorException e) {
-        log.error("WhatsApp API server error ({}): {} for notification {}",
-                e.getStatusCode(),
-                e.getMessage(),
-                message.getNotificationId());
-        throw new WhatsAppApiException(
-                "Server error: " + e.getStatusCode() + " - " + e.getMessage(),
-                true
-        );
+    private void handleClientError(WhatsAppNotificationMessage message, HttpClientErrorException e) {
+        String body = e.getResponseBodyAsString();
+        log.error("Twilio Client Error ({}): {}", e.getStatusCode(), body);
+        boolean retryable = (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS);
+        throw new WhatsAppApiException("Twilio client error: " + e.getStatusCode(), retryable);
     }
 
-    private void handleNetworkError(WhatsAppNotificationMessage message,
-                                    ResourceAccessException e) {
-        log.error("WhatsApp API network/timeout error: {} for notification {}",
-                e.getMessage(),
-                message.getNotificationId());
-        throw new WhatsAppApiException(
-                "Network/timeout error: " + e.getMessage(),
-                true
-        );
+    private void handleServerError(WhatsAppNotificationMessage message, HttpServerErrorException e) {
+        log.error("Twilio Server Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+        throw new WhatsAppApiException("Twilio server error", true);
     }
 
-    private void handleUnexpectedError(WhatsAppNotificationMessage message,
-                                       Exception e) {
-        log.error("Unexpected error sending WhatsApp message {}: {}",
-                message.getNotificationId(),
-                e.getMessage(),
-                e);
-        throw new WhatsAppApiException(
-                "Unexpected error: " + e.getMessage(),
-                false
-        );
+    private void handleNetworkError(WhatsAppNotificationMessage message, ResourceAccessException e) {
+        log.error("Network/Timeout error: {}", e.getMessage());
+        throw new WhatsAppApiException("Twilio connectivity error", true);
+    }
+
+    private void handleUnexpectedError(WhatsAppNotificationMessage message, Exception e) {
+        log.error("Unexpected error for {}: {}", message.getNotificationId(), e.getMessage());
+        throw new WhatsAppApiException("Internal worker error: " + e.getMessage(), false);
+    }
+
+    private String ensureWhatsappPrefix(String number) {
+        String cleaned = number.trim();
+        if (cleaned.startsWith("whatsapp:")) return cleaned;
+        return "whatsapp:" + (cleaned.startsWith("+") ? cleaned : "+" + cleaned);
     }
 }

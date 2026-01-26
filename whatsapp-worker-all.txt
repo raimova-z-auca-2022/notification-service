@@ -1,0 +1,230 @@
+----- FILE: backend/whatsapp-worker/pom.xml -----
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>kg.notifications</groupId>
+    <artifactId>whatsapp-worker</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>whatsapp-worker</name>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.8</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <version>4.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+----- FILE: backend/whatsapp-worker/Dockerfile -----
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /app
+COPY target/whatsapp-worker-*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+----- FILE: backend/whatsapp-worker/.gitignore -----
+target/
+logs/
+*.log
+
+----- FILE: backend/whatsapp-worker/$PROFILE.txt -----
+# Windows profile info (ignored)
+
+----- FILE: backend/whatsapp-worker/db/init.sql -----
+-- Placeholder DB init for whatsapp worker (if needed)
+
+----- FILE: backend/whatsapp-worker/src/main/resources/application.yml -----
+spring:
+  application:
+    name: whatsapp-worker
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        retry:
+          enabled: false
+
+server:
+  port: ${SERVER_PORT:8081}
+
+app:
+  whatsapp:
+    api:
+      # Twilio WhatsApp API URL
+      base-url: https://api.twilio.com/2010-04-01/Accounts/AC4a0e9d8445e0e4ab389e984268d2af83/Messages.json
+
+      # ВАШ ПРАВИЛЬНЫЙ ТОКЕН (тот что вы сгенерировали):
+      token: Basic QUM0YTBlOWQ4NDQ1ZTBlNGFiMzg5ZTk4NDI2OGQyYWY4Mzo5OTFkMjQ1YWYzYjc0NGU1MzRjYWU5YzJlYWU0ZDNhYg==
+      from-number: whatsapp:+14787775394  # ← ДОБАВЬТЕ ЭТО
+      timeout-ms: 30000
+      max-retries: 3
+
+    queue:
+      name: q.notification.whatsapp  # ← должно совпадать с именем очереди
+      dlq: ns.whatsapp.dlq
+
+    retry:
+      delays: [ "5s", "30s", "60s", "300s", "900s" ]
+
+logging:
+  level:
+    root: INFO
+    kg.notifications.whatsapp: DEBUG
+    org.springframework.amqp: INFO
+    org.springframework.web.client: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
+  file:
+    name: logs/whatsapp-worker.log
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/WhatsAppApplication.java -----
+package kg.notifications.whatsapp;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class WhatsAppApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(WhatsAppApplication.class, args);
+    }
+}
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/WhatsAppService.java -----
+package kg.notifications.whatsapp.service;
+
+import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+
+public interface WhatsAppService {
+    void sendMessage(WhatsAppNotificationMessage message);
+}
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/RetryService.java -----
+package kg.notifications.whatsapp.service;
+
+import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+import org.springframework.amqp.core.Message;
+
+public interface RetryService {
+    void scheduleRetry(Message originalMessage, WhatsAppNotificationMessage notificationMessage, int nextRetryCount);
+}
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/NotificationStatusService.java -----
+package kg.notifications.whatsapp.service;
+
+import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+
+public interface NotificationStatusService {
+    void sendProcessingStatus(WhatsAppNotificationMessage message);
+    void sendSuccessStatus(WhatsAppNotificationMessage message, String messageId);
+    void sendErrorStatus(WhatsAppNotificationMessage message, String errorMessage);
+}
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/impl/WhatsAppServiceImpl.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/impl/RetryServiceImpl.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/impl/NotificationStatusServiceImpl.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/impl/DLQServiceImpl.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/service/DLQService.java -----
+package kg.notifications.whatsapp.service;
+
+import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+
+public interface DLQService {
+    void sendToDLQ(WhatsAppNotificationMessage message, String errorReason);
+}
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/listener/WhatsAppNotificationListener.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/listener/RobustWhatsAppNotificationListener.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/dto/WhatsAppNotificationMessage.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/dto/NotificationStatusEvent.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/exception/WhatsAppApiException.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/exception/InvalidMessageException.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/config/RestTemplateConfig.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/config/RabbitConfig.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.>
+
+----- FILE: backend/whatsapp-worker/src/main/java/kg/notifications/whatsapp/config/AppProperties.java -----
+<content omitted here because it's long — included in file created; full content available in workspace file.

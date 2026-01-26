@@ -7,6 +7,8 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper; // ДОБАВЛЕНО
+import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper; // ДОБАВЛЕНО
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +25,13 @@ public class RabbitConfig {
 
     @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
-        return new Jackson2JsonMessageConverter(objectMapper);
+        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter(objectMapper);
+        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+        // Игнорируем метаданные классов, чтобы воркер мог десериализовать в свой пакет
+        typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.TYPE_ID);
+        typeMapper.setTrustedPackages("*");
+        converter.setJavaTypeMapper(typeMapper);
+        return converter;
     }
 
     @Bean
@@ -37,7 +45,7 @@ public class RabbitConfig {
 
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(ConnectionFactory connectionFactory,
-                                                                              Jackson2JsonMessageConverter converter) {
+                                                                               Jackson2JsonMessageConverter converter) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(converter);
@@ -45,14 +53,10 @@ public class RabbitConfig {
         return factory;
     }
 
-    /**
-     * Single source of truth: gateway declares all exchanges/queues/bindings.
-     */
     @Bean
     public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
         RabbitAdmin admin = new RabbitAdmin(connectionFactory);
         admin.setAutoStartup(true);
-
         declareTopology(admin);
         return admin;
     }
@@ -65,62 +69,47 @@ public class RabbitConfig {
         admin.declareExchange(notificationExchange);
         admin.declareExchange(statusExchange);
 
-        // Main queues
+        // Queues
         Queue emailQueue = new Queue(r.getQueueEmail(), true);
         Queue telegramQueue = new Queue(r.getQueueTelegram(), true);
+        Queue whatsappQueue = new Queue("q.notification.whatsapp", true); // Исправлено здесь
+
         admin.declareQueue(emailQueue);
         admin.declareQueue(telegramQueue);
+        admin.declareQueue(whatsappQueue);
 
         admin.declareBinding(BindingBuilder.bind(emailQueue).to(notificationExchange).with(r.getRoutingEmail()));
         admin.declareBinding(BindingBuilder.bind(telegramQueue).to(notificationExchange).with(r.getRoutingTelegram()));
+        admin.declareBinding(BindingBuilder.bind(whatsappQueue).to(notificationExchange).with(r.getRoutingWhatsapp()));
 
-        // Status queue (gateway consumes)
         Queue statusQueue = new Queue(r.getQueueStatusGateway(), true);
         admin.declareQueue(statusQueue);
         admin.declareBinding(BindingBuilder.bind(statusQueue).to(statusExchange).with("status.*"));
 
-        // Retry queues (TTL + DLX back to x.notification)
         declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingEmail(), r.getEmailRetryQueues(), r.getEmailDlq());
         declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingTelegram(), r.getTelegramRetryQueues(), r.getTelegramDlq());
     }
 
-    private void declareRetryAndDlq(RabbitAdmin admin,
-                                   String deadLetterExchangeName,
-                                   String deadLetterRoutingKey,
-                                   List<String> retryQueueNames,
-                                   String dlqName) {
-        // DLQ
+    private void declareRetryAndDlq(RabbitAdmin admin, String deadLetterExchangeName, String deadLetterRoutingKey, List<String> retryQueueNames, String dlqName) {
         if (dlqName != null && !dlqName.isBlank()) {
             admin.declareQueue(new Queue(dlqName, true));
         }
-
-        // Map retry queue name to TTL (based on suffix)
         for (String qName : retryQueueNames) {
-            if (qName == null || qName.isBlank()) {
-                continue;
-            }
-            long ttlMs = inferTtlMs(qName);
+            if (qName == null || qName.isBlank()) continue;
             Map<String, Object> args = new HashMap<>();
-            args.put("x-message-ttl", ttlMs);
+            args.put("x-message-ttl", inferTtlMs(qName));
             args.put("x-dead-letter-exchange", deadLetterExchangeName);
             args.put("x-dead-letter-routing-key", deadLetterRoutingKey);
-            Queue retryQueue = new Queue(qName, true, false, false, args);
-            admin.declareQueue(retryQueue);
+            admin.declareQueue(new Queue(qName, true, false, false, args));
         }
     }
 
     private long inferTtlMs(String qName) {
-        // q.notification.email.retry.15s / 60s / 300s / 900s / 3600s
-        String[] parts = qName.split("\\.");
-        String last = parts[parts.length - 1];
-        if (last.endsWith("s")) {
-            String num = last.substring(0, last.length() - 1);
-            try {
-                long seconds = Long.parseLong(num);
-                return seconds * 1000L;
-            } catch (NumberFormatException ignored) {
-            }
-        }
+        try {
+            String[] parts = qName.split("\\.");
+            String last = parts[parts.length - 1];
+            if (last.endsWith("s")) return Long.parseLong(last.substring(0, last.length() - 1)) * 1000L;
+        } catch (Exception ignored) {}
         return 15000L;
     }
 }

@@ -1,0 +1,1008 @@
+----- FILE: backend/notification-gateway/db/init.sql -----
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY,
+  type VARCHAR(16) NOT NULL CHECK (type IN ('EMAIL', 'TELEGRAM', 'WHATSAPP')),
+  recipient VARCHAR(255) NOT NULL,
+  text TEXT NOT NULL,
+
+  status VARCHAR(16) NOT NULL CHECK (status IN ('NEW','PUBLISHED','PROCESSING','SENT','FAILED','DEAD')),
+  attempt INT NOT NULL DEFAULT 0,
+
+  idempotency_key VARCHAR(128) NOT NULL,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  last_error_code VARCHAR(64),
+  last_error_message TEXT,
+  provider_message_id VARCHAR(128)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_notifications_idempotency_key
+  ON notifications (idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_notifications_status
+  ON notifications (status);
+
+CREATE INDEX IF NOT EXISTS ix_notifications_type_created
+  ON notifications (type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS ix_notifications_recipient
+  ON notifications (recipient);
+
+CREATE TABLE IF NOT EXISTS notification_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  notification_id UUID NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+
+  event_type VARCHAR(32) NOT NULL,
+  status VARCHAR(16),
+  attempt INT,
+  error_code VARCHAR(64),
+  error_message TEXT,
+  provider_message_id VARCHAR(128),
+
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_events_notification_id_time
+  ON notification_events (notification_id, occurred_at DESC);
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_notifications_set_updated_at ON notifications;
+CREATE TRIGGER trg_notifications_set_updated_at
+BEFORE UPDATE ON notifications
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+----- FILE: backend/notification-gateway/pom.xml -----
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>kg.notifications</groupId>
+    <artifactId>notification-gateway</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>notification-gateway</name>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- REST -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- RabbitMQ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- JDBC -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!-- Postgres -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+----- FILE: backend/notification-gateway/Dockerfile -----
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn -q -DskipTests package
+
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java","-jar","app.jar"]
+
+----- FILE: backend/notification-gateway/target/classes/application.yml -----
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: notification-gateway
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gateway_db}
+    username: ${DB_USERNAME:gateway}
+    password: ${DB_PASSWORD:gateway_pass}
+    driver-class-name: org.postgresql.Driver
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+logging:
+  level:
+    root: INFO
+    kg.notifications: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
+    routingEmail: ${ROUTING_EMAIL:email}
+    routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    queueEmail: ${QUEUE_EMAIL:q.notification.email}
+    queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+
+    # retry queues must exist; workers will publish to them directly
+    emailRetryQueues:
+      - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
+      - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
+      - ${EMAIL_RETRY_Q3:q.notification.email.retry.300s}
+      - ${EMAIL_RETRY_Q4:q.notification.email.retry.900s}
+      - ${EMAIL_RETRY_Q5:q.notification.email.retry.3600s}
+    emailDlq: ${EMAIL_DLQ:q.notification.email.dlq}
+
+    telegramRetryQueues:
+      - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}
+      - ${TG_RETRY_Q2:q.notification.telegram.retry.60s}
+      - ${TG_RETRY_Q3:q.notification.telegram.retry.300s}
+      - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
+      - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
+    telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
+
+  idempotency:
+    required: ${IDEMPOTENCY_REQUIRED:true}
+  publish:
+    confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}
+
+----- FILE: backend/notification-gateway/src/main/resources/application.yml -----
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: notification-gateway
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gateway_db}
+    username: ${DB_USERNAME:gateway}
+    password: ${DB_PASSWORD:gateway_pass}
+    driver-class-name: org.postgresql.Driver
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+logging:
+  level:
+    root: INFO
+    kg.notifications: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.status}
+    routingEmail: ${ROUTING_EMAIL:email}
+    routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
+
+    queueEmail: ${QUEUE_EMAIL:q.notification.email}
+    queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+
+    # retry queues
+    emailRetryQueues:
+      - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
+      - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
+      - ${EMAIL_RETRY_Q3:q.notification.email.retry.300s}
+    emailDlq: ${EMAIL_DLQ:q.notification.email.dlq}
+
+    telegramRetryQueues:
+      - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}
+      - ${TG_RETRY_Q2:q.notification.telegram.retry.60s}
+      - ${TG_RETRY_Q3:q.notification.telegram.retry.300s}
+    telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
+
+    whatsappRetryQueues:
+      - ${WHATSAPP_RETRY_Q1:ns.whatsapp.retry.5s}
+      - ${WHATSAPP_RETRY_Q2:ns.whatsapp.retry.30s}
+      - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
+    whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
+
+  idempotency:
+    required: ${IDEMPOTENCY_REQUIRED:true}
+  publish:
+    confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/service/NotificationService.java -----
+package kg.notifications.gateway.service;
+
+import kg.notifications.gateway.dto.NotificationCreateRequest;
+import kg.notifications.gateway.dto.NotificationCreateResponse;
+import kg.notifications.gateway.dto.NotificationResponse;
+
+import java.util.UUID;
+
+public interface NotificationService {
+    NotificationCreateResponse create(NotificationCreateRequest request, String idempotencyKey);
+    NotificationResponse getById(UUID id);
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/repository/NotificationEventRepository.java -----
+package kg.notifications.gateway.repository;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+public class NotificationEventRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public void insertEvent(UUID notificationId,
+                            String eventType,
+                            String status,
+                            Integer attempt,
+                            String errorCode,
+                            String errorMessage,
+                            String providerMessageId) {
+        jdbcTemplate.update(
+                "INSERT INTO notification_events(notification_id,event_type,status,attempt,error_code,error_message,provider_message_id) VALUES (?,?,?,?,?,?,?)",
+                notificationId, eventType, status, attempt, errorCode, errorMessage, providerMessageId
+        );
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/GatewayApplication.java -----
+package kg.notifications.gateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+
+@SpringBootApplication
+@ConfigurationPropertiesScan
+public class GatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/repository/NotificationRepository.java -----
+package kg.notifications.gateway.repository;
+
+import kg.notifications.gateway.dto.NotificationResponse;
+import kg.notifications.gateway.dto.NotificationStatus;
+import kg.notifications.gateway.dto.NotificationType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+public class NotificationRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<NotificationResponse> mapper = new RowMapper<>() {
+        @Override
+        public NotificationResponse mapRow(ResultSet rs, int rowNum) throws SQLException {
+            return new NotificationResponse(
+                    rs.getObject("id").toString(),
+                    NotificationType.valueOf(rs.getString("type")),
+                    rs.getString("recipient"),
+                    rs.getString("text"),
+                    NotificationStatus.valueOf(rs.getString("status")),
+                    rs.getInt("attempt"),
+                    rs.getString("last_error_code"),
+                    rs.getString("last_error_message"),
+                    rs.getString("provider_message_id"),
+                    rs.getObject("created_at", OffsetDateTime.class),
+                    rs.getObject("updated_at", OffsetDateTime.class)
+            );
+        }
+    };
+
+    public void insertNew(UUID id, NotificationType type, String recipient, String text, String idempotencyKey) {
+        jdbcTemplate.update(
+                "INSERT INTO notifications(id,type,recipient,text,status,attempt,idempotency_key) VALUES (?,?,?,?, 'NEW', 0, ?)",
+                id, type.name(), recipient, text, idempotencyKey
+        );
+    }
+
+    public Optional<NotificationResponse> findById(UUID id) {
+        return jdbcTemplate.query("SELECT * FROM notifications WHERE id = ?", mapper, id)
+                .stream().findFirst();
+    }
+
+    public Optional<NotificationResponse> findByIdempotencyKey(String idempotencyKey) {
+        return jdbcTemplate.query("SELECT * FROM notifications WHERE idempotency_key = ?", mapper, idempotencyKey)
+                .stream().findFirst();
+    }
+
+    public void markPublished(UUID id) {
+        jdbcTemplate.update("UPDATE notifications SET status='PUBLISHED' WHERE id=?", id);
+    }
+
+    public void updateFromStatusEvent(UUID id,
+                                      NotificationStatus status,
+                                      int attempt,
+                                      String errorCode,
+                                      String errorMessage,
+                                      String providerMessageId) {
+        jdbcTemplate.update(
+                "UPDATE notifications SET status=?, attempt=?, last_error_code=?, last_error_message=?, provider_message_id=? WHERE id=?",
+                status.name(), attempt, errorCode, errorMessage, providerMessageId, id
+        );
+    }
+
+    public void markFailed(UUID id, String errorCode, String errorMessage) {
+        jdbcTemplate.update(
+                "UPDATE notifications SET status='FAILED', last_error_code=?, last_error_message=? WHERE id= ?",
+                errorCode, errorMessage, id
+        );
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/messaging/StatusEventsListener.java -----
+package kg.notifications.gateway.messaging;
+
+import com.rabbitmq.client.Channel;
+import kg.notifications.gateway.dto.StatusEventDto;
+import kg.notifications.gateway.repository.NotificationEventRepository;
+import kg.notifications.gateway.repository.NotificationRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class StatusEventsListener {
+
+    private final NotificationRepository notificationRepository;
+    private final NotificationEventRepository eventRepository;
+
+    @RabbitListener(queues = "${app.rabbit.queueStatusGateway}", containerFactory = "rabbitListenerContainerFactory")
+    public void onStatus(StatusEventDto evt,
+                         Channel channel,
+                         @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException {
+        try {
+            UUID id = UUID.fromString(evt.notificationId());
+            notificationRepository.updateFromStatusEvent(
+                    id,
+                    evt.status(),
+                    evt.attempt(),
+                    evt.errorCode(),
+                    evt.errorMessage(),
+                    evt.providerMessageId()
+            );
+            eventRepository.insertEvent(
+                    id,
+                    "STATUS_CHANGED",
+                    evt.status().name(),
+                    evt.attempt(),
+                    evt.errorCode(),
+                    evt.errorMessage(),
+                    evt.providerMessageId()
+            );
+            channel.basicAck(tag, false);
+        } catch (Exception e) {
+            channel.basicNack(tag, false, false);
+        }
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/messaging/NotificationPublisher.java -----
+package kg.notifications.gateway.messaging;
+
+import kg.notifications.gateway.config.AppProperties;
+import kg.notifications.gateway.dto.NotificationType;
+import kg.notifications.gateway.messaging.dto.NotificationCommandDto;
+import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+@Component
+@RequiredArgsConstructor
+public class NotificationPublisher {
+
+    private final RabbitTemplate rabbitTemplate;
+    private final AppProperties props;
+
+    public boolean publish(NotificationCommandDto dto) {
+        String routingKey = resolveRoutingKey(dto.type());
+        CorrelationData correlationData = new CorrelationData(dto.notificationId());
+
+        rabbitTemplate.convertAndSend(
+                props.getRabbit().getExchangeNotification(),
+                routingKey,
+                dto,
+                message -> {
+                    message.getMessageProperties().setContentType("application/json");
+                    return message;
+                },
+                correlationData
+        );
+
+        try {
+            CorrelationData.Confirm confirm = correlationData.getFuture()
+                    .get(props.getPublish().getConfirmTimeoutMs(), TimeUnit.MILLISECONDS);
+            return confirm != null && confirm.isAck();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String resolveRoutingKey(NotificationType type) {
+        return switch (type) {
+            case EMAIL -> props.getRabbit().getRoutingEmail();
+            case TELEGRAM -> props.getRabbit().getRoutingTelegram();
+            case WHATSAPP -> "whatsapp"; // Используем фиксированный routing key
+        };
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/service/impl/NotificationServiceImpl.java -----
+package kg.notifications.gateway.service.impl;
+
+import kg.notifications.gateway.config.AppProperties;
+import kg.notifications.gateway.dto.NotificationCreateRequest;
+import kg.notifications.gateway.dto.NotificationCreateResponse;
+import kg.notifications.gateway.dto.NotificationResponse;
+import kg.notifications.gateway.exception.BadRequestException;
+import kg.notifications.gateway.exception.NotFoundException;
+import kg.notifications.gateway.messaging.NotificationPublisher;
+import kg.notifications.gateway.messaging.dto.NotificationCommandDto;
+import kg.notifications.gateway.repository.NotificationEventRepository;
+import kg.notifications.gateway.repository.NotificationRepository;
+import kg.notifications.gateway.service.NotificationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class NotificationServiceImpl implements NotificationService {
+
+    private final NotificationRepository notificationRepository;
+    private final NotificationEventRepository eventRepository;
+    private final NotificationPublisher publisher;
+    private final AppProperties props;
+
+    @Override
+    public NotificationCreateResponse create(NotificationCreateRequest request, String idempotencyKey) {
+        if (props.getIdempotency().isRequired() && (idempotencyKey == null || idempotencyKey.isBlank())) {
+            throw new BadRequestException("Idempotency-Key header is required");
+        }
+
+        Optional<NotificationResponse> existing = notificationRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return new NotificationCreateResponse(existing.get().id());
+        }
+
+        UUID id = UUID.randomUUID();
+        notificationRepository.insertNew(id, request.type(), request.recipient(), request.text(), idempotencyKey);
+        eventRepository.insertEvent(id, "CREATED", "NEW", 0, null, null, null);
+
+        NotificationCommandDto cmd = new NotificationCommandDto(
+                id.toString(),
+                request.type(),
+                request.recipient(),
+                request.text(),
+                0,
+                OffsetDateTime.now()
+        );
+
+        boolean published = publisher.publish(cmd);
+        if (!published) {
+            notificationRepository.markFailed(id, "PUBLISH_FAILED", "RabbitMQ publish confirm not received");
+            eventRepository.insertEvent(id, "PUBLISH_FAILED", "FAILED", 0, "PUBLISH_FAILED", "RabbitMQ publish confirm not received", null);
+            return new NotificationCreateResponse(id.toString());
+        }
+
+        notificationRepository.markPublished(id);
+        eventRepository.insertEvent(id, "PUBLISHED", "PUBLISHED", 0, null, null, null);
+
+        return new NotificationCreateResponse(id.toString());
+    }
+
+    @Override
+    public NotificationResponse getById(UUID id) {
+        return notificationRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Notification not found: id=" + id));
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/exception/RestExceptionHandler.java -----
+package kg.notifications.gateway.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.OffsetDateTime;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class RestExceptionHandler {
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiError> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError(ex.getMessage(), "BAD_REQUEST", OffsetDateTime.now()));
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(NotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError(ex.getMessage(), "NOT_FOUND", OffsetDateTime.now()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError(msg, "VALIDATION_ERROR", OffsetDateTime.now()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleOther(Exception ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError(ex.getMessage(), "INTERNAL_ERROR", OffsetDateTime.now()));
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/messaging/dto/NotificationCommandDto.java -----
+package kg.notifications.gateway.messaging.dto;
+
+import kg.notifications.gateway.dto.NotificationType;
+
+import java.time.OffsetDateTime;
+
+public record NotificationCommandDto(
+        String notificationId,
+        NotificationType type,
+        String recipient,
+        String text,
+        int attempt,
+        OffsetDateTime createdAt
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/exception/NotFoundException.java -----
+package kg.notifications.gateway.exception;
+
+public class NotFoundException extends RuntimeException {
+    public NotFoundException(String message) {
+        super(message);
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/exception/BadRequestException.java -----
+package kg.notifications.gateway.exception;
+
+public class BadRequestException extends RuntimeException {
+    public BadRequestException(String message) {
+        super(message);
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/exception/ApiError.java -----
+package kg.notifications.gateway.exception;
+
+import java.time.OffsetDateTime;
+
+public record ApiError(
+        String message,
+        String code,
+        OffsetDateTime timestamp
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/StatusEventDto.java -----
+package kg.notifications.gateway.dto;
+
+import java.time.OffsetDateTime;
+
+public record StatusEventDto(
+        String notificationId,
+        NotificationType type,
+        NotificationStatus status,
+        int attempt,
+        String errorCode,
+        String errorMessage,
+        String providerMessageId,
+        OffsetDateTime occurredAt
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/NotificationType.java -----
+package kg.notifications.gateway.dto;
+
+public enum NotificationType {
+    EMAIL,
+    TELEGRAM,
+    WHATSAPP
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/NotificationStatus.java -----
+package kg.notifications.gateway.dto;
+
+public enum NotificationStatus {
+    NEW,
+    PUBLISHED,
+    PROCESSING,
+    SENT,
+    FAILED,
+    DEAD
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/NotificationResponse.java -----
+package kg.notifications.gateway.dto;
+
+import java.time.OffsetDateTime;
+
+public record NotificationResponse(
+        String id,
+        NotificationType type,
+        String recipient,
+        String text,
+        NotificationStatus status,
+        int attempt,
+        String lastErrorCode,
+        String lastErrorMessage,
+        String providerMessageId,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/NotificationCreateResponse.java -----
+package kg.notifications.gateway.dto;
+
+public record NotificationCreateResponse(String notificationId) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/dto/NotificationCreateRequest.java -----
+package kg.notifications.gateway.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public record NotificationCreateRequest(
+        @NotNull NotificationType type,
+        @NotBlank String recipient,
+        @NotBlank String text
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/messaging/dto/NotificationCommandDto.java -----
+package kg.notifications.gateway.messaging.dto;
+
+import kg.notifications.gateway.dto.NotificationType;
+
+import java.time.OffsetDateTime;
+
+public record NotificationCommandDto(
+        String notificationId,
+        NotificationType type,
+        String recipient,
+        String text,
+        int attempt,
+        OffsetDateTime createdAt
+) {}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/controller/NotificationController.java -----
+package kg.notifications.gateway.controller;
+
+import jakarta.validation.Valid;
+import kg.notifications.gateway.dto.NotificationCreateRequest;
+import kg.notifications.gateway.dto.NotificationCreateResponse;
+import kg.notifications.gateway.dto.NotificationResponse;
+import kg.notifications.gateway.service.NotificationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+
+@RestController
+@RequiredArgsConstructor
+public class NotificationController {
+
+    private final NotificationService notificationService;
+
+    @PostMapping("/notifications")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public NotificationCreateResponse create(@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+                                             @Valid @RequestBody NotificationCreateRequest request) {
+        return notificationService.create(request, idempotencyKey);
+    }
+
+    @GetMapping("/notifications/{id}")
+    public NotificationResponse getById(@PathVariable UUID id) {
+        return notificationService.getById(id);
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/config/RabbitConfig.java -----
+package kg.notifications.gateway.config;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Configuration
+@RequiredArgsConstructor
+public class RabbitConfig {
+
+    private final AppProperties props;
+
+    @Bean
+    public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
+    }
+
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory,
+                                         Jackson2JsonMessageConverter converter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(converter);
+        template.setMandatory(true);
+        return template;
+    }
+
+    @Bean
+    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(ConnectionFactory connectionFactory,
+                                                                              Jackson2JsonMessageConverter converter) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(converter);
+        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        return factory;
+    }
+
+    /**
+     * Single source of truth: gateway declares all exchanges/queues/bindings.
+     */
+    @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        RabbitAdmin admin = new RabbitAdmin(connectionFactory);
+        admin.setAutoStartup(true);
+
+        declareTopology(admin);
+        return admin;
+    }
+
+    private void declareTopology(RabbitAdmin admin) {
+        AppProperties.Rabbit r = props.getRabbit();
+
+        DirectExchange notificationExchange = new DirectExchange(r.getExchangeNotification(), true, false);
+        TopicExchange statusExchange = new TopicExchange(r.getExchangeStatus(), true, false);
+        admin.declareExchange(notificationExchange);
+        admin.declareExchange(statusExchange);
+
+        // Main queues
+        Queue emailQueue = new Queue(r.getQueueEmail(), true);
+        Queue telegramQueue = new Queue(r.getQueueTelegram(), true);
+        admin.declareQueue(emailQueue);
+        admin.declareQueue(telegramQueue);
+
+        admin.declareBinding(BindingBuilder.bind(emailQueue).to(notificationExchange).with(r.getRoutingEmail()));
+        admin.declareBinding(BindingBuilder.bind(telegramQueue).to(notificationExchange).with(r.getRoutingTelegram()));
+
+        // Status queue (gateway consumes)
+        Queue statusQueue = new Queue(r.getQueueStatusGateway(), true);
+        admin.declareQueue(statusQueue);
+        admin.declareBinding(BindingBuilder.bind(statusQueue).to(statusExchange).with("status.*"));
+
+        // Retry queues (TTL + DLX back to x.notification)
+        declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingEmail(), r.getEmailRetryQueues(), r.getEmailDlq());
+        declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingTelegram(), r.getTelegramRetryQueues(), r.getTelegramDlq());
+    }
+
+    private void declareRetryAndDlq(RabbitAdmin admin,
+                                   String deadLetterExchangeName,
+                                   String deadLetterRoutingKey,
+                                   List<String> retryQueueNames,
+                                   String dlqName) {
+        // DLQ
+        if (dlqName != null && !dlqName.isBlank()) {
+            admin.declareQueue(new Queue(dlqName, true));
+        }
+
+        // Map retry queue name to TTL (based on suffix)
+        for (String qName : retryQueueNames) {
+            if (qName == null || qName.isBlank()) {
+                continue;
+            }
+            long ttlMs = inferTtlMs(qName);
+            Map<String, Object> args = new HashMap<>();
+            args.put("x-message-ttl", ttlMs);
+            args.put("x-dead-letter-exchange", deadLetterExchangeName);
+            args.put("x-dead-letter-routing-key", deadLetterRoutingKey);
+            Queue retryQueue = new Queue(qName, true, false, false, args);
+            admin.declareQueue(retryQueue);
+        }
+    }
+
+    private long inferTtlMs(String qName) {
+        // q.notification.email.retry.15s / 60s / 300s / 900s / 3600s
+        String[] parts = qName.split("\\.");
+        String last = parts[parts.length - 1];
+        if (last.endsWith("s")) {
+            String num = last.substring(0, last.length() - 1);
+            try {
+                long seconds = Long.parseLong(num);
+                return seconds * 1000L;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 15000L;
+    }
+}
+
+----- FILE: backend/notification-gateway/src/main/java/kg/notifications/gateway/config/AppProperties.java -----
+package kg.notifications.gateway.config;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Configuration
+@ConfigurationProperties(prefix = "app")
+@Data
+public class AppProperties {
+
+    private Rabbit rabbit = new Rabbit();
+    private Idempotency idempotency = new Idempotency();
+    private Publish publish = new Publish();
+
+    @Data
+    public static class Rabbit {
+        private String exchangeNotification;
+        private String exchangeStatus;
+
+        private String routingEmail;
+        private String routingTelegram;
+        private String routingWhatsapp = "whatsapp"; // ДОБАВЛЕНО
+
+        private String queueEmail;
+        private String queueTelegram;
+        private String queueStatusGateway;
+
+        private List<String> emailRetryQueues = new ArrayList<>();
+        private String emailDlq;
+
+        private List<String> telegramRetryQueues = new ArrayList<>();
+        private String telegramDlq;
+
+        private List<String> whatsappRetryQueues = new ArrayList<>(); // ДОБАВЛЕНО
+        private String whatsappDlq; // ДОБАВЛЕНО
+    }
+
+    @Data
+    public static class Idempotency {
+        private boolean required = true;
+    }
+
+    @Data
+    public static class Publish {
+        private long confirmTimeoutMs = 3000;
+    }
+}
