@@ -19,18 +19,18 @@ public class StatusUpdateListener {
 
     @RabbitListener(queues = "q.status")
     public void handleStatusUpdate(StatusEventDto event) {
-        log.info("Processing status update for {}: {}", event.notificationId(), event.status());
+        log.info("Received status update for {}: {}", event.getNotificationId(), event.getStatus());
 
         try {
             repository.updateFromStatusEvent(
-                    UUID.fromString(event.notificationId()),
-                    event.status(),
-                    event.attempt(),
-                    event.errorCode(),
-                    event.errorMessage(),
-                    event.providerMessageId()
+                    UUID.fromString(event.getNotificationId()),
+                    NotificationStatus.valueOf(event.getStatus()), // Превращаем String обратно в Enum
+                    event.getAttempt(),
+                    event.getErrorCode(),
+                    event.getErrorMessage(),
+                    event.getProviderMessageId()
             );
-            log.info("Database updated for notification {}", event.notificationId());
+            log.info("Database updated for notification {}", event.getNotificationId());
         } catch (Exception e) {
             log.error("Failed to update status in DB: {}", e.getMessage());
         }

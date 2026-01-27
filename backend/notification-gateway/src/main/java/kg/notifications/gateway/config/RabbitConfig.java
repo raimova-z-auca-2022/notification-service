@@ -82,9 +82,11 @@ public class RabbitConfig {
         admin.declareBinding(BindingBuilder.bind(telegramQueue).to(notificationExchange).with(r.getRoutingTelegram()));
         admin.declareBinding(BindingBuilder.bind(whatsappQueue).to(notificationExchange).with(r.getRoutingWhatsapp()));
 
-        Queue statusQueue = new Queue(r.getQueueStatusGateway(), true);
+// СТАЛО (Жестко задаем "q.status", чтобы слушатель точно нашел её)
+        Queue statusQueue = new Queue("q.status", true); // <--- Важное изменение
         admin.declareQueue(statusQueue);
-        admin.declareBinding(BindingBuilder.bind(statusQueue).to(statusExchange).with("status.*"));
+// Биндинг делаем на "status.#", чтобы ловить любые ключи (status.updates, status.error и т.д.)
+        admin.declareBinding(BindingBuilder.bind(statusQueue).to(statusExchange).with("status.#"));
 
         declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingEmail(), r.getEmailRetryQueues(), r.getEmailDlq());
         declareRetryAndDlq(admin, notificationExchange.getName(), r.getRoutingTelegram(), r.getTelegramRetryQueues(), r.getTelegramDlq());

@@ -1,6 +1,5 @@
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\config\AppProperties.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\controller\NotificationController.java
-C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\StatusEventDto.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\service\impl\NotificationServiceImpl.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationType.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\repository\NotificationRepository.java
@@ -14,9 +13,10 @@ C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notif
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\messaging\NotificationPublisher.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationCreateResponse.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\exception\ApiError.java
+C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\messaging\listener\StatusUpdateListener.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\service\NotificationService.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\GatewayApplication.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\config\RabbitConfig.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationResponse.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationCreateRequest.java
-C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\messaging\StatusEventsListener.java
+C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\messaging\dto\StatusEventDto.java
