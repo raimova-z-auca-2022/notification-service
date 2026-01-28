@@ -3,6 +3,7 @@ C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notif
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\service\impl\NotificationServiceImpl.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationType.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\repository\NotificationRepository.java
+C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\BroadcastRequest.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\dto\NotificationStatus.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\exception\BadRequestException.java
 C:\SDET\notification-service\backend\notification-gateway\src\main\java\kg\notifications\gateway\repository\NotificationEventRepository.java

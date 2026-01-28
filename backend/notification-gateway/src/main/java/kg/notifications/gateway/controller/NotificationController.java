@@ -1,12 +1,14 @@
 package kg.notifications.gateway.controller;
 
 import jakarta.validation.Valid;
+import kg.notifications.gateway.dto.BroadcastRequest;
 import kg.notifications.gateway.dto.NotificationCreateRequest;
 import kg.notifications.gateway.dto.NotificationCreateResponse;
 import kg.notifications.gateway.dto.NotificationResponse;
 import kg.notifications.gateway.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -27,5 +29,17 @@ public class NotificationController {
     @GetMapping("/notifications/{id}")
     public NotificationResponse getById(@PathVariable UUID id) {
         return notificationService.getById(id);
+    }
+
+    // Чистый метод для рассылки
+    @PostMapping("/notifications/broadcast")
+    public ResponseEntity<String> sendBroadcast(
+            @RequestBody BroadcastRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+
+        // Вся логика теперь внутри сервиса
+        notificationService.sendBroadcast(request, idempotencyKey);
+
+        return ResponseEntity.ok("Рассылка успешно запущена для " + request.getRecipients().size() + " пользователей.");
     }
 }

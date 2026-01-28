@@ -1,6 +1,7 @@
 package kg.notifications.gateway.service.impl;
 
 import kg.notifications.gateway.config.AppProperties;
+import kg.notifications.gateway.dto.BroadcastRequest; // Импорт
 import kg.notifications.gateway.dto.NotificationCreateRequest;
 import kg.notifications.gateway.dto.NotificationCreateResponse;
 import kg.notifications.gateway.dto.NotificationResponse;
@@ -13,6 +14,7 @@ import kg.notifications.gateway.repository.NotificationRepository;
 import kg.notifications.gateway.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Желательно добавить транзакционность
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -29,6 +31,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public NotificationCreateResponse create(NotificationCreateRequest request, String idempotencyKey) {
+        // Твоя существующая логика создания одиночного уведомления (без изменений)
         if (props.getIdempotency().isRequired() && (idempotencyKey == null || idempotencyKey.isBlank())) {
             throw new BadRequestException("Idempotency-Key header is required");
         }
@@ -62,6 +65,38 @@ public class NotificationServiceImpl implements NotificationService {
         eventRepository.insertEvent(id, "PUBLISHED", "PUBLISHED", 0, null, null, null);
 
         return new NotificationCreateResponse(id.toString());
+    }
+
+    @Override
+    public void sendBroadcast(BroadcastRequest request, String idempotencyKey) {
+        // 1. Валидация (логика теперь здесь, а не в контроллере)
+        if (request.getRecipients() == null || request.getRecipients().isEmpty()) {
+            throw new BadRequestException("Список получателей не может быть пустым");
+        }
+
+        // 2. Генерация общего ID пачки
+        String batchId = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyKey
+                : UUID.randomUUID().toString();
+
+        // 3. Логирование (опционально)
+        System.out.println(">>> Service: Starting broadcast for " + request.getRecipients().size() + " recipients.");
+
+        // 4. Цикл рассылки
+        for (String recipient : request.getRecipients()) {
+            // Создаем объект Record через конструктор!
+            NotificationCreateRequest singleRequest = new NotificationCreateRequest(
+                    request.getType(),
+                    recipient,
+                    request.getText()
+            );
+
+            // Формируем уникальный ключ: "batchId-phone"
+            String uniqueKey = batchId + "-" + recipient;
+
+            // Вызываем метод create (реюзаем логику)
+            this.create(singleRequest, uniqueKey);
+        }
     }
 
     @Override
