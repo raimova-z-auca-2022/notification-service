@@ -1,0 +1,81 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: notification-gateway
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gateway_db}
+    username: ${DB_USERNAME:gateway}
+    password: ${DB_PASSWORD:gateway_pass}
+    driver-class-name: org.postgresql.Driver
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+logging:
+  level:
+    root: INFO
+    kg.notifications: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    # Используем EXCHANGE_STATUS Айгерим (он длиннее), но запомни его!
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
+
+    routingEmail: ${ROUTING_EMAIL:email}
+    routingTelegram: ${ROUTING_TELEGRAM:telegram}
+    routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp} # ТВОЁ
+    routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration} # Айгерим
+
+    queueEmail: ${QUEUE_EMAIL:q.notification.email}
+    queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
+    queueWhatsapp: ${QUEUE_WHATSAPP:q.notification.whatsapp} # ТВОЁ
+    queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration} # Айгерим
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+
+    # Списки очередей для повторов (Retries)
+    emailRetryQueues:
+      - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}
+      - ${EMAIL_RETRY_Q2:q.notification.email.retry.60s}
+      - ${EMAIL_RETRY_Q3:q.notification.email.retry.300s}
+      - ${EMAIL_RETRY_Q4:q.notification.email.retry.900s}
+      - ${EMAIL_RETRY_Q5:q.notification.email.retry.3600s}
+    emailDlq: ${EMAIL_DLQ:q.notification.email.dlq}
+
+    telegramRetryQueues:
+      - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}
+      - ${TG_RETRY_Q2:q.notification.telegram.retry.60s}
+      - ${TG_RETRY_Q3:q.notification.telegram.retry.300s}
+      - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
+      - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
+    telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
+
+    # Твои очереди повторов для WhatsApp
+    whatsappRetryQueues:
+      - ${WHATSAPP_RETRY_Q1:ns.whatsapp.retry.5s}
+      - ${WHATSAPP_RETRY_Q2:ns.whatsapp.retry.30s}
+      - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
+    whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
+
+  telegram:
+    botToken: ${TELEGRAM_BOT_TOKEN}
+    botName: ${TELEGRAM_BOT_NAME:MyCoolNotifier_bot}
+
+  idempotency:
+    required: ${IDEMPOTENCY_REQUIRED:true}
+  publish:
+    confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}

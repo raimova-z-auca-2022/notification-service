@@ -1,6 +1,8 @@
 services:
   rabbitmq:
-    image: rabbitmq:3.13-management
+    build:
+      context: ./rabbitmq
+      dockerfile: Dockerfile
     container_name: rabbitmq
     ports:
       - "5672:5672"
@@ -27,8 +29,7 @@ services:
       POSTGRES_PASSWORD: gateway_pass
     volumes:
       - pg_gateway_data:/var/lib/postgresql/data
-      # КОММЕНТИРУЕМ СТРОКУ НИЖЕ, ЧТОБЫ ИЗБЕЖАТЬ ОШИБКИ ПРИ СТАРТЕ БАЗЫ
-      # - ../notification-gateway/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./notification-gateway/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gateway -d gateway_db"]
       interval: 10s
@@ -37,9 +38,49 @@ services:
     networks:
       - ns_net
 
+  postgres_email:
+    image: postgres:16
+    container_name: postgres_email
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: email_db
+      POSTGRES_USER: email
+      POSTGRES_PASSWORD: email_pass
+    volumes:
+      - pg_email_data:/var/lib/postgresql/data
+      - ./email-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U email -d email_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ns_net
+
+  postgres_telegram:
+    image: postgres:16
+    container_name: postgres_telegram
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: telegram_db
+      POSTGRES_USER: telegram
+      POSTGRES_PASSWORD: telegram_pass
+    volumes:
+      - pg_telegram_data:/var/lib/postgresql/data
+      - ./telegram-worker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telegram -d telegram_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ns_net
+
   notification-gateway:
     build:
-      context: ../notification-gateway
+      context: ./notification-gateway
       dockerfile: Dockerfile
     container_name: notification-gateway
     depends_on:
@@ -51,42 +92,108 @@ services:
       - "8080:8080"
     environment:
       SERVER_PORT: 8080
+
       DB_HOST: postgres_gateway
       DB_PORT: 5432
       DB_NAME: gateway_db
       DB_USERNAME: gateway
       DB_PASSWORD: gateway_pass
+
       RABBIT_HOST: rabbitmq
       RABBIT_PORT: 5672
       RABBIT_USER: ${RABBITMQ_USER:-guest}
       RABBIT_PASS: ${RABBITMQ_PASS:-guest}
+
       IDEMPOTENCY_REQUIRED: "true"
+
       EXCHANGE_NOTIFICATION: "x.notification"
       EXCHANGE_STATUS: "x.notification.status"
       ROUTING_EMAIL: "email"
       ROUTING_TELEGRAM: "telegram"
+      TELEGRAM_BOT_NAME: "MyCoolNotifier_bot"
+
     networks:
       - ns_net
 
-  whatsapp-worker:
+  email-worker:
     build:
-      context: .
+      context: ./email-worker
       dockerfile: Dockerfile
-    container_name: whatsapp-worker
+    container_name: email-worker
     depends_on:
       rabbitmq:
         condition: service_healthy
-    ports:
-      - "8083:8083"
+      postgres_email:
+        condition: service_healthy
     environment:
-      SERVER_PORT: 8083
+      SERVER_PORT: 8081
+
+      DB_HOST: postgres_email
+      DB_PORT: 5432
+      DB_NAME: email_db
+      DB_USERNAME: email
+      DB_PASSWORD: email_pass
+
       RABBIT_HOST: rabbitmq
       RABBIT_PORT: 5672
       RABBIT_USER: ${RABBITMQ_USER:-guest}
       RABBIT_PASS: ${RABBITMQ_PASS:-guest}
-      QUEUE_IN: "q.notification.whatsapp"
+
+      QUEUE_IN: "q.notification.email"
       EXCHANGE_STATUS: "x.notification.status"
-      STATUS_ROUTING_KEY: "status.whatsapp"
+      STATUS_ROUTING_KEY: "status.email"
+
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
+
+      RETRY_MAX_ATTEMPTS: "5"
+
+    networks:
+      - ns_net
+
+  telegram-worker:
+    build:
+      context: ./telegram-worker
+      dockerfile: Dockerfile
+    container_name: telegram-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres_telegram:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8082
+
+      DB_HOST: postgres_telegram
+      DB_PORT: 5432
+      DB_NAME: telegram_db
+      DB_USERNAME: telegram
+      DB_PASSWORD: telegram_pass
+
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-guest}
+
+      RABBITMQ_QUEUES_TELEGRAM: "q.notification.telegram"
+      QUEUE_IN: "q.notification.telegram"
+      EXCHANGE_STATUS: "x.notification.status"
+      STATUS_ROUTING_KEY: "status.telegram"
+
+
+      TELEGRAM_BOT_API_URL: "https://api.telegram.org"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_NAME: "MyCoolNotifier_bot"
+      TELEGRAM_POLLING_ENABLED: "true"
+      TELEGRAM_POLLING_INTERVAL_MS: "1500"
+
+      LINK_CODE_TTL_MINUTES: "10"
+      LINK_CODE_MAX_ATTEMPTS: "5"
+
+      RETRY_MAX_ATTEMPTS: "5"
+
     networks:
       - ns_net
 
@@ -96,3 +203,5 @@ networks:
 
 volumes:
   pg_gateway_data:
+  pg_email_data:
+  pg_telegram_data:
