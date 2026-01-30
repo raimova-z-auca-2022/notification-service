@@ -1,6 +1,6 @@
 kg\notifications\gateway\repository\impl\JdbcNotificationRepository.class
-kg\notifications\gateway\service\ScheduledNotificationService$1.class
 kg\notifications\gateway\controller\TelegramAuthController.class
+kg\notifications\gateway\rowMapper\ScheduledNotificationRowMapper.class
 kg\notifications\gateway\config\AppProperties$Telegram.class
 kg\notifications\gateway\service\impl\TelegramAuthServiceImpl.class
 kg\notifications\gateway\service\ScheduledNotificationService.class
@@ -9,6 +9,7 @@ kg\notifications\gateway\messaging\StatusEventsListener.class
 kg\notifications\gateway\controller\ScheduledNotificationController.class
 kg\notifications\gateway\dto\ScheduledNotificationEntity.class
 kg\notifications\gateway\service\TelegramAuthService.class
+kg\notifications\gateway\service\impl\ScheduledNotificationServiceImpl$1.class
 kg\notifications\gateway\service\NotificationStatusService.class
 kg\notifications\gateway\dto\ScheduledNotificationRequest.class
 kg\notifications\gateway\repository\ScheduledNotificationRepository.class
@@ -16,5 +17,7 @@ kg\notifications\gateway\dto\RegistrationCommandDto.class
 kg\notifications\gateway\service\impl\NotificationStatusServiceImpl.class
 kg\notifications\gateway\rowMapper\NotificationRowMapper.class
 kg\notifications\gateway\dto\StatusEventDto.class
+kg\notifications\gateway\service\impl\ScheduledNotificationServiceImpl.class
+kg\notifications\gateway\repository\impl\ScheduledNotificationRepositoryImpl.class
 kg\notifications\gateway\messaging\ScheduledMessageConsumer.class
 kg\notifications\gateway\dto\ScheduledNotificationResponse.class

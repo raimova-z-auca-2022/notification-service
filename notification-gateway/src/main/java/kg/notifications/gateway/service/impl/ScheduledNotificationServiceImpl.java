@@ -118,6 +118,7 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
         return switch (type) {
             case EMAIL -> props.getRabbit().getRoutingEmail();
             case TELEGRAM -> props.getRabbit().getRoutingTelegram();
+            case WHATSAPP -> props.getRabbit().getRoutingWhatsapp();
             default -> throw new IllegalArgumentException("Unknown type: " + type);
         };
     }

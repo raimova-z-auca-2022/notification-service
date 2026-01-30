@@ -35,9 +35,7 @@ public class AppProperties {
         private String queueStatusGateway;
 
         private String routingScheduled; // От Айгерим
-        private String routingScheduledProcess; // От Айгерим
         private String queueScheduledMessages; // От Айгерим
-        private String queueScheduledProcessing; // От Айгерим
 
         private List<String> emailRetryQueues = new ArrayList<>();
         private String emailDlq;

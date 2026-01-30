@@ -20,6 +20,10 @@ spring:
     password: ${RABBIT_PASS:guest}
     publisher-confirm-type: correlated
     publisher-returns: true
+    listener:
+      simple:
+        missing-queues-fatal: false
+        acknowledge-mode: auto
 
 # Оставляем блок из ветки Айгерим для работы планировщика
 scheduling:
@@ -48,7 +52,6 @@ app:
     routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
     routingScheduled: ${ROUTING_SCHEDULED:message.scheduled}
-    routingScheduledProcess: ${ROUTING_SCHEDULED_PROCESS:scheduled.process}
 
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
@@ -56,7 +59,6 @@ app:
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
     queueScheduledMessages: ${QUEUE_SCHEDULED_MESSAGES:q.scheduled.messages}
-    queueScheduledProcessing: ${QUEUE_SCHEDULED_PROCESSING:q.scheduled.processing}
 
     emailRetryQueues:
       - ${EMAIL_RETRY_Q1:q.notification.email.retry.15s}

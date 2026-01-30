@@ -119,10 +119,6 @@ public class RabbitConfig {
         return new Queue(props.getRabbit().getQueueStatusGateway(), true);
     }
 
-    @Bean // Фикс для старой очереди, которую ищет Listener
-    public Queue legacyStatusQueue() {
-        return new Queue("q.status", true);
-    }
 
     @Bean
     public Queue scheduledMessagesQueue() {
@@ -167,12 +163,6 @@ public class RabbitConfig {
                 .with("status.*");
     }
 
-    @Bean
-    public Binding legacyStatusBinding() {
-        return BindingBuilder.bind(legacyStatusQueue())
-                .to(statusExchange())
-                .with("status.whatsapp");
-    }
 
     @Bean
     public Binding scheduledMessagesBinding() {
