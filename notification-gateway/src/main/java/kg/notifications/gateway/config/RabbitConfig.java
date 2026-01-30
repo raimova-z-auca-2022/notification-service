@@ -121,10 +121,6 @@ public class RabbitConfig {
         return new Queue(props.getRabbit().getQueueScheduledMessages(), true);
     }
 
-    @Bean
-    public Queue scheduledProcessingQueue() {
-        return new Queue(props.getRabbit().getQueueScheduledProcessing(), true);
-    }
 
     // ---------- Bindings ----------
 
@@ -163,13 +159,6 @@ public class RabbitConfig {
                 .to(delayedExchange())
                 .with(props.getRabbit().getRoutingScheduled())
                 .noargs();
-    }
-
-    @Bean
-    public Binding scheduledProcessingBinding() {
-        return BindingBuilder.bind(scheduledProcessingQueue())
-                .to(notificationExchange())
-                .with(props.getRabbit().getRoutingScheduledProcess());
     }
 
     // ---------- Retry + DLQ ----------

@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS scheduled_notifications (
     type VARCHAR(50) NOT NULL,
     recipient VARCHAR(500) NOT NULL,
     text TEXT NOT NULL,
-    scheduled_at TIMESTAMP NOT NULL,
+    scheduled_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) NOT NULL,
     sent_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

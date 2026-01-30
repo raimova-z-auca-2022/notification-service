@@ -17,7 +17,7 @@ spring:
     listener:
       simple:
         missing-queues-fatal: false
-        acknowledge-mode: manual
+        acknowledge-mode: auto
 
 app:
   rabbit:

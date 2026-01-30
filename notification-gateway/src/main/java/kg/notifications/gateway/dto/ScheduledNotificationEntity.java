@@ -1,6 +1,7 @@
 package kg.notifications.gateway.dto;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ScheduledNotificationEntity(
@@ -8,7 +9,7 @@ public record ScheduledNotificationEntity(
         NotificationType type,
         String recipient,
         String text,
-        LocalDateTime scheduledAt,
+        OffsetDateTime scheduledAt,
         String status,
         LocalDateTime sentAt,
         LocalDateTime createdAt,
