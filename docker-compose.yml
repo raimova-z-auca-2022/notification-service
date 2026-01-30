@@ -196,6 +196,27 @@ services:
 
     networks:
       - ns_net
+  whatsapp-worker:
+    build:
+      context: ./whatsapp-worker
+      dockerfile: Dockerfile
+    container_name: whatsapp-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: ${RABBITMQ_USER:-guest}
+      RABBIT_PASS: ${RABBITMQ_PASS:-guest}
+      QUEUE_IN: "q.notification.whatsapp"
+      EXCHANGE_STATUS: "x.notification.status"
+      STATUS_ROUTING_KEY: "status.whatsapp"
+    networks:
+      - ns_net
 
 networks:
   ns_net:

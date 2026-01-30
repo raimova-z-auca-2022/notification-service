@@ -2,14 +2,15 @@ package kg.notifications.whatsapp.config;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage; // ИСПРАВЛЕНО
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
-import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper; // ДОБАВЛЕНО
-import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper; // ДОБАВЛЕНО
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,16 @@ import java.util.Map;
 public class RabbitConfig {
 
     private final AppProperties appProperties;
+    @Bean
+    public FanoutExchange broadcastExchange() {
+        return new FanoutExchange("x.broadcast", true, false);
+    }
+
+    @Bean
+    public Binding broadcastBinding() {
+        return BindingBuilder.bind(whatsappQueue()) // твоя существующая очередь
+                .to(broadcastExchange());
+    }
 
     @Bean
     public ObjectMapper objectMapper() {
@@ -33,10 +44,26 @@ public class RabbitConfig {
     }
 
     @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        RabbitAdmin admin = new RabbitAdmin(connectionFactory);
+        admin.setAutoStartup(true);
+        admin.setIgnoreDeclarationExceptions(true);
+        return admin;
+    }
+
+    @Bean
     public Jackson2JsonMessageConverter messageConverter(ObjectMapper objectMapper) {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter(objectMapper);
-        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
-        typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.TYPE_ID);
+
+        // Создаем маппер, который всегда возвращает твой DTO
+        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper() {
+            @Override
+            public com.fasterxml.jackson.databind.JavaType toJavaType(org.springframework.amqp.core.MessageProperties properties) {
+                // Прямое указание: всегда использовать WhatsAppNotificationMessage
+                return objectMapper.getTypeFactory().constructType(kg.notifications.whatsapp.dto.WhatsAppNotificationMessage.class);
+            }
+        };
+
         typeMapper.setTrustedPackages("*");
         converter.setJavaTypeMapper(typeMapper);
         return converter;

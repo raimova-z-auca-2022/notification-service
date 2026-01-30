@@ -24,17 +24,10 @@ public class ScheduledNotificationService {
 
     @Transactional
     public ScheduledNotificationResponse scheduleNotification(ScheduledNotificationRequest request) {
-        // Создаем entity
         ScheduledNotificationEntity entity = ScheduledNotificationEntity.create(request);
-
-        // Сохраняем в БД
         repository.save(entity);
-
-        // Отправляем в delayed exchange
         sendToDelayedQueue(entity);
-
         log.info("Scheduled notification saved: {}", entity.id());
-
         return mapToResponse(entity);
     }
 
@@ -65,11 +58,12 @@ public class ScheduledNotificationService {
     }
 
     private long calculateDelay(LocalDateTime scheduledTime) {
+        // Учитываем текущее время в UTC для точности с RabbitMQ
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
         ZonedDateTime scheduled = scheduledTime.atZone(ZoneId.systemDefault());
-        return Duration.between(now, scheduled).toMillis();
+        long delay = Duration.between(now, scheduled).toMillis();
+        return Math.max(0, delay); // Чтобы не было отрицательной задержки
     }
-
 
     public void sendToNotificationQueue(ScheduledNotificationEntity entity) {
         NotificationCommandDto command = new NotificationCommandDto(
@@ -96,11 +90,14 @@ public class ScheduledNotificationService {
         return switch (type) {
             case EMAIL -> props.getRabbit().getRoutingEmail();
             case TELEGRAM -> props.getRabbit().getRoutingTelegram();
+            // ДОБАВЛЕНО: поддержка WhatsApp
+            case WHATSAPP -> props.getRabbit().getRoutingWhatsapp() != null
+                    ? props.getRabbit().getRoutingWhatsapp()
+                    : "whatsapp";
             default -> throw new IllegalArgumentException("Unknown type: " + type);
         };
     }
 
-    // Fallback проверка
     @Scheduled(fixedDelayString = "${scheduling.missed-check-delay:60000}")
     @Transactional
     public void checkMissedScheduledMessages() {
@@ -114,10 +111,7 @@ public class ScheduledNotificationService {
             log.warn("Found {} missed scheduled messages", missed.size());
 
             missed.forEach(entity -> {
-                // Помечаем как пропущенные
                 repository.updateStatus(entity.id(), "MISSED", now);
-
-                // Отправляем для обработки
                 sendToNotificationQueue(entity);
             });
         }

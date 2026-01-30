@@ -55,7 +55,7 @@ public class RabbitConfig {
     public RabbitAdmin rabbitAdmin(ConnectionFactory cf) {
         RabbitAdmin admin = new RabbitAdmin(cf);
         admin.setAutoStartup(true);
-        admin.setIgnoreDeclarationExceptions(true); // 🔑 не падаем при race
+        admin.setIgnoreDeclarationExceptions(true);
         return admin;
     }
 
@@ -79,7 +79,6 @@ public class RabbitConfig {
         );
     }
 
-    // ---------- Delayed Exchange для отложенных сообщений ----------
     @Bean
     public CustomExchange delayedExchange() {
         Map<String, Object> args = new HashMap<>();
@@ -106,6 +105,11 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue whatsappQueue() {
+        return new Queue(props.getRabbit().getQueueWhatsapp(), true);
+    }
+
+    @Bean
     public Queue telegramRegistrationQueue() {
         return new Queue(props.getRabbit().getQueueTelegramRegistration(), true);
     }
@@ -115,7 +119,11 @@ public class RabbitConfig {
         return new Queue(props.getRabbit().getQueueStatusGateway(), true);
     }
 
-    // ← НОВЫЕ очереди для запланированных сообщений →
+    @Bean // Фикс для старой очереди, которую ищет Listener
+    public Queue legacyStatusQueue() {
+        return new Queue("q.status", true);
+    }
+
     @Bean
     public Queue scheduledMessagesQueue() {
         return new Queue(props.getRabbit().getQueueScheduledMessages(), true);
@@ -143,6 +151,13 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Binding whatsappBinding() {
+        return BindingBuilder.bind(whatsappQueue())
+                .to(notificationExchange())
+                .with(props.getRabbit().getRoutingWhatsapp());
+    }
+
+    @Bean
     public Binding telegramRegistrationBinding() {
         return BindingBuilder.bind(telegramRegistrationQueue())
                 .to(notificationExchange())
@@ -156,7 +171,13 @@ public class RabbitConfig {
                 .with("status.*");
     }
 
-    // ← НОВЫЕ bindings для запланированных сообщений →
+    @Bean
+    public Binding legacyStatusBinding() {
+        return BindingBuilder.bind(legacyStatusQueue())
+                .to(statusExchange())
+                .with("status.whatsapp");
+    }
+
     @Bean
     public Binding scheduledMessagesBinding() {
         return BindingBuilder.bind(scheduledMessagesQueue())
@@ -224,5 +245,4 @@ public class RabbitConfig {
         }
         return 15000L;
     }
-
 }
