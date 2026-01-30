@@ -1,13 +1,14 @@
 package kg.notifications.gateway.dto;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record ScheduledNotificationResponse(
         String id,
         NotificationType type,
         String recipient,
         String text,
-        LocalDateTime scheduledAt,
+        OffsetDateTime scheduledAt,
         LocalDateTime createdAt,
         String status
 ) {}

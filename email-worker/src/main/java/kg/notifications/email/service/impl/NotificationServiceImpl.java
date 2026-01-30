@@ -40,7 +40,6 @@ public class NotificationServiceImpl implements NotificationService {
 
             log.error("EMAIL notification {} failed", cmd.notificationId(), e);
 
-            throw e;
         }
     }
 }
