@@ -1,7 +1,6 @@
 package kg.notifications.whatsapp.service;
 
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
 
 public interface DLQService {
-    void sendToDLQ(WhatsAppNotificationMessage message, String errorReason);
+    void sendToDlq(Object payload, String dlqQueueName, String originalQueue, String exceptionMsg);
 }

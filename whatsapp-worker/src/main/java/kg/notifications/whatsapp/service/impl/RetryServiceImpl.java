@@ -1,81 +1,59 @@
 package kg.notifications.whatsapp.service.impl;
 
 import kg.notifications.whatsapp.config.AppProperties;
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+import kg.notifications.whatsapp.dto.NotificationCommandDto;
+import kg.notifications.whatsapp.service.DLQService;
 import kg.notifications.whatsapp.service.RetryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageBuilder;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-@Slf4j
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class RetryServiceImpl implements RetryService {
 
     private final RabbitTemplate rabbitTemplate;
     private final AppProperties appProperties;
+    private final DLQService dlqService; // Внедряем наш новый сервис
+
+    private static final String HEADER_X_RETRIES_COUNT = "x-retries-count";
+    private static final String HEADER_X_EXCEPTION = "x-exception-message";
 
     @Override
-    public void scheduleRetry(Message originalMessage,
-                              WhatsAppNotificationMessage notificationMessage,
-                              int nextRetryCount) {
+    public void handleError(NotificationCommandDto message, Integer currentRetryCount, Throwable ex) {
+        int attempt = (currentRetryCount == null) ? 0 : currentRetryCount;
+        int nextAttempt = attempt + 1;
 
-        long delayMillis = calculateDelayMillis(nextRetryCount);
+        List<String> retryQueues = appProperties.getRabbit().getWhatsappRetryQueues();
 
-        Map<String, Object> headers = new HashMap<>();
-        headers.putAll(originalMessage.getMessageProperties().getHeaders());
-        headers.put("x-retry-count", nextRetryCount);
-        headers.put("x-scheduled-time", new Date());
 
-        Message retryMessage = MessageBuilder
-                .withBody(originalMessage.getBody())
-                .copyHeaders(headers)
-                .setHeader("x-delay", delayMillis)
-                .build();
+        if (retryQueues != null && nextAttempt <= retryQueues.size()) {
+            String targetQueue = retryQueues.get(nextAttempt - 1);
 
-        rabbitTemplate.send(
-                "x.notification",
-                "whatsapp",
-                retryMessage
-        );
+            log.warn("Retry #{} for telegram. Queue: {}. Error: {}", nextAttempt, targetQueue, ex.getMessage());
 
-        log.debug("Scheduled retry #{} in {}ms for notification {}",
-                nextRetryCount, delayMillis, notificationMessage.getNotificationId());
-    }
-
-    private long calculateDelayMillis(int retryCount) {
-        List<String> delays = appProperties.getRetry().getDelays();
-
-        if (delays.isEmpty()) {
-            return switch (retryCount) {
-                case 1 -> 60_000L;
-                case 2 -> 300_000L;
-                case 3 -> 900_000L;
-                case 4 -> 3_600_000L;
-                default -> 14_400_000L;
-            };
+            sendToRetryQueue(message, targetQueue, nextAttempt, ex.getMessage());
         } else {
-            String delayStr = delays.get(Math.min(retryCount - 1, delays.size() - 1));
-            return parseDelayToMillis(delayStr);
+            log.error("Retries exhausted for telegram. Sending to DLQ.");
+
+            dlqService.sendToDlq(
+                    message,
+                    appProperties.getRabbit().getWhatsappDlq(),
+                    appProperties.getRabbit().getQueueWhatsapp(),
+                    ex.getMessage()
+            );
         }
     }
 
-    private long parseDelayToMillis(String delay) {
-        if (delay.endsWith("s")) {
-            return Long.parseLong(delay.substring(0, delay.length() - 1)) * 1000;
-        } else if (delay.endsWith("m")) {
-            return Long.parseLong(delay.substring(0, delay.length() - 1)) * 60_000;
-        } else if (delay.endsWith("h")) {
-            return Long.parseLong(delay.substring(0, delay.length() - 1)) * 3_600_000;
-        }
-        return Long.parseLong(delay) * 1000;
+    private void sendToRetryQueue(NotificationCommandDto message, String queue, int retryCount, String error) {
+        rabbitTemplate.convertAndSend(queue, message, m -> {
+            m.getMessageProperties().setHeader(HEADER_X_RETRIES_COUNT, retryCount);
+            m.getMessageProperties().setHeader(HEADER_X_EXCEPTION, error);
+            return m;
+        });
     }
 }

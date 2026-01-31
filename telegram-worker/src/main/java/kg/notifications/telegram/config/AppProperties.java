@@ -26,6 +26,7 @@ public class AppProperties {
 
         private String queueTelegram;
         private String queueTelegramRegistration;
+        private String queueStatusGateway;
 
 
         private List<String> telegramRetryQueues = new ArrayList<>();

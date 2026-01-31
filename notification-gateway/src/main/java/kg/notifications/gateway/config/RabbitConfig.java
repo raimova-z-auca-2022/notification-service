@@ -10,6 +10,7 @@ import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFacto
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Map;
 
 @Configuration
 @RequiredArgsConstructor
+@Slf4j
 public class RabbitConfig {
 
     private final AppProperties props;
@@ -34,6 +36,28 @@ public class RabbitConfig {
         RabbitTemplate template = new RabbitTemplate(cf);
         template.setMessageConverter(converter);
         template.setMandatory(true);
+        // Логируем подтверждения (confirms) и возвраты (returns) для диагностики доставки
+        template.setConfirmCallback((correlationData, ack, cause) -> {
+            if (correlationData != null) {
+                String id = correlationData.getId();
+                if (ack) {
+                    log.debug("Confirm ACK for correlationId={}", id);
+                } else {
+                    log.warn("Confirm NACK for correlationId={} cause={}", id, cause);
+                }
+            } else {
+                log.warn("Confirm callback with null correlationData, ack={}, cause={}", ack, cause);
+            }
+        });
+
+        template.setReturnsCallback(returned -> {
+            if (returned != null) {
+                log.warn("Returned message: replyCode={}, replyText={}, exchange={}, routingKey={}",
+                        returned.getReplyCode(), returned.getReplyText(), returned.getExchange(), returned.getRoutingKey());
+            } else {
+                log.warn("Returned callback invoked with null message");
+            }
+        });
         return template;
     }
 

@@ -1,8 +1,6 @@
 package kg.notifications.whatsapp.config;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage; // ИСПРАВЛЕНО
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
@@ -11,12 +9,14 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
+import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -24,24 +24,101 @@ import java.util.Map;
 public class RabbitConfig {
 
     private final AppProperties appProperties;
+
+    // --- ОЧЕРЕДИ ---
+
     @Bean
-    public FanoutExchange broadcastExchange() {
-        return new FanoutExchange("x.broadcast", true, false);
+    public Queue whatsappQueue() {
+        return new Queue(appProperties.getRabbit().getQueueWhatsapp(), true);
     }
 
     @Bean
-    public Binding broadcastBinding() {
-        return BindingBuilder.bind(whatsappQueue()) // твоя существующая очередь
-                .to(broadcastExchange());
+    public Queue statusQueueGateway() {
+        return new Queue(appProperties.getRabbit().getQueueStatusGateway(), true);
+    }
+
+
+    // --- ОБМЕННИКИ ---
+
+    @Bean
+    public DirectExchange notificationExchange() {
+        return new DirectExchange(
+                appProperties.getRabbit().getExchangeNotification(),
+                true,
+                false
+        );
     }
 
     @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        return mapper;
+    public TopicExchange statusExchange() {
+        return new TopicExchange(
+                appProperties.getRabbit().getExchangeStatus(),
+                true,
+                false
+        );
     }
+
+    // --- БИНДИНГИ ---
+
+    @Bean
+    public Binding whatsappBinding() {
+        return BindingBuilder.bind(whatsappQueue())
+                .to(notificationExchange())
+                .with(appProperties.getRabbit().getRoutingWhatsapp());
+    }
+
+    @Bean
+    public Binding statusBinding() {
+        return BindingBuilder.bind(statusQueueGateway())
+                .to(statusExchange())
+                .with("status.*");
+    }
+
+    // ---------- Retry + DLQ ----------
+
+    @Bean
+    public Declarables whatsappRetryTopology() {
+        return retryTopology(
+                appProperties.getRabbit().getWhatsappRetryQueues(),
+                appProperties.getRabbit().getWhatsappDlq(),
+                appProperties.getRabbit().getRoutingWhatsapp()
+        );
+    }
+
+    private Declarables retryTopology(
+            List<String> retryQueues,
+            String dlq,
+            String routingKey
+    ) {
+        Map<String, Object> dlqArgs = new HashMap<>();
+        Queue dlqQueue = new Queue(dlq, true, false, false, dlqArgs);
+
+        List<Declarable> declarables = new java.util.ArrayList<>();
+        declarables.add(dlqQueue);
+
+        for (String q : retryQueues) {
+            Map<String, Object> args = new HashMap<>();
+            args.put("x-message-ttl", inferTtlMs(q));
+            args.put("x-dead-letter-exchange", appProperties.getRabbit().getExchangeNotification());
+            args.put("x-dead-letter-routing-key", routingKey);
+
+            declarables.add(new Queue(q, true, false, false, args));
+        }
+
+        return new Declarables(declarables);
+    }
+
+    private long inferTtlMs(String qName) {
+        String last = qName.substring(qName.lastIndexOf('.') + 1);
+        if (last.endsWith("s")) {
+            try {
+                return Long.parseLong(last.replace("s", "")) * 1000L;
+            } catch (Exception ignored) {}
+        }
+        return 15000L;
+    }
+
+    // --- ИНФРАСТРУКТУРА ---
 
     @Bean
     public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
@@ -54,50 +131,12 @@ public class RabbitConfig {
     @Bean
     public Jackson2JsonMessageConverter messageConverter(ObjectMapper objectMapper) {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter(objectMapper);
-
-        // Создаем маппер, который всегда возвращает твой DTO
-        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper() {
-            @Override
-            public com.fasterxml.jackson.databind.JavaType toJavaType(org.springframework.amqp.core.MessageProperties properties) {
-                // Прямое указание: всегда использовать WhatsAppNotificationMessage
-                return objectMapper.getTypeFactory().constructType(kg.notifications.whatsapp.dto.WhatsAppNotificationMessage.class);
-            }
-        };
-
+        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
         typeMapper.setTrustedPackages("*");
+        // Важно для поддержки разных типов (уведомления и регистрация)
+        typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;
-    }
-
-    @Bean
-    public Queue whatsappQueue() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-dead-letter-exchange", "x.dead-letter");
-        args.put("x-dead-letter-routing-key", appProperties.getQueue().getDlq());
-        args.put("x-max-priority", 10);
-        return new Queue(appProperties.getQueue().getName(), true, false, false, args);
-    }
-
-    @Bean
-    public Queue whatsappDlq() {
-        return new Queue(appProperties.getQueue().getDlq(), true);
-    }
-
-    @Bean
-    public DirectExchange notificationExchange() {
-        return new DirectExchange("x.notification", true, false);
-    }
-
-    @Bean
-    public DirectExchange deadLetterExchange() {
-        return new DirectExchange("x.dead-letter", true, false);
-    }
-
-    @Bean
-    public Binding whatsappBinding() {
-        return BindingBuilder.bind(whatsappQueue())
-                .to(notificationExchange())
-                .with("whatsapp");
     }
 
     @Bean
@@ -108,7 +147,6 @@ public class RabbitConfig {
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(converter);
         factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
-        factory.setPrefetchCount(10);
         factory.setAdviceChain(retryInterceptor());
         return factory;
     }

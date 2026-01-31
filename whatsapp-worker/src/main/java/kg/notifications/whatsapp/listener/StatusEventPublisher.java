@@ -1,7 +1,8 @@
-package kg.notifications.telegram.messaging;
+package kg.notifications.whatsapp.listener;
 
-import kg.notifications.telegram.config.AppProperties;
-import kg.notifications.telegram.dto.*;
+import kg.notifications.whatsapp.config.AppProperties;
+import kg.notifications.whatsapp.dto.*;
+import kg.notifications.whatsapp.dto.NotificationStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
@@ -51,7 +52,7 @@ public class StatusEventPublisher {
 
         rabbitTemplate.convertAndSend(
                 appProperties.getRabbit().getExchangeStatus(),
-                "status.telegram",
+                "status.whatsapp",
                 event,
                 message -> {
                     message.getMessageProperties().setCorrelationId(cmd.notificationId());
@@ -60,4 +61,5 @@ public class StatusEventPublisher {
         );
     }
 }
+
 

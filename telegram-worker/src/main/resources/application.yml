@@ -27,6 +27,7 @@ app:
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
 
     telegramRetryQueues:
       - ${TG_RETRY_Q1:q.notification.telegram.retry.15s}

@@ -1,74 +1,65 @@
 package kg.notifications.whatsapp.listener;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rabbitmq.client.Channel;
-import kg.notifications.gateway.messaging.dto.StatusEventDto;
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+import kg.notifications.whatsapp.config.AppProperties;
+import kg.notifications.whatsapp.dto.NotificationCommandDto;
+import kg.notifications.whatsapp.dto.NotificationStatus;
+import kg.notifications.whatsapp.dto.NotificationType;
+import kg.notifications.whatsapp.dto.StatusEventDto;
+import kg.notifications.whatsapp.service.RetryService;
 import kg.notifications.whatsapp.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class WhatsAppNotificationListener {
 
-    private final ObjectMapper objectMapper;
-    private final WhatsAppService whatsAppService;
     private final RabbitTemplate rabbitTemplate;
+    private final WhatsAppService whatsAppService;
+    private final RetryService retryService;
+    private final AppProperties appProperties;
 
-    @RabbitListener(queues = "${app.whatsapp.queue.name}", containerFactory = "rabbitListenerContainerFactory")
-    public void onMessage(Message amqpMessage, Channel channel) throws IOException {
-        long deliveryTag = amqpMessage.getMessageProperties().getDeliveryTag();
-        String payload = new String(amqpMessage.getBody(), StandardCharsets.UTF_8);
+    @RabbitListener(queues = "${app.rabbit.queueWhatsapp}")
+    public void handleNotification(NotificationCommandDto dto,
+                                   @Header(required = false, name = "x-retries-count") Integer retryCount,
+                                   @Header(name = AmqpHeaders.CORRELATION_ID, required = false) String correlationId) {
+        log.info("Received notification for recipient: {}. Retry count: {}", dto.recipient(), retryCount, correlationId);
 
         try {
-            String json = payload;
-            if (json.startsWith("\"") && json.endsWith("\"")) {
-                json = objectMapper.readValue(json, String.class);
-            }
-
-            WhatsAppNotificationMessage message = objectMapper.readValue(json, WhatsAppNotificationMessage.class);
-            log.info("Processing WhatsApp notification [ID: {}]", message.getNotificationId());
-
-            whatsAppService.sendMessage(message);
-
-            // Отправляем статус текстом
-            sendStatusUpdate(message.getNotificationId().toString(), "SENT", null, null);
-
-            channel.basicAck(deliveryTag, false);
+            whatsAppService.sendMessage(dto);
+            sendStatusUpdate(dto.notificationId().toString(), "SENT", null, null);
         } catch (Exception e) {
-            log.error("Failed to process message: {}", e.getMessage());
-            try {
-                var node = objectMapper.readTree(payload);
-                String id = node.has("notificationId") ? node.get("notificationId").asText() : UUID.randomUUID().toString();
-                sendStatusUpdate(id, "FAILED", "ERR_500", e.getMessage());
-            } catch (Exception ignored) {}
-            channel.basicAck(deliveryTag, false);
+            log.error("Failed to send telegram notification: {}", e.getMessage());
+            retryService.handleError(dto, retryCount, e);
+            sendStatusUpdate(dto.notificationId().toString(), "PROCESSING", null, null);
         }
     }
 
     private void sendStatusUpdate(String id, String status, String errCode, String errMsg) {
-        StatusEventDto event = StatusEventDto.builder()
-                .notificationId(id)
-                .type("WHATSAPP")
-                .status(status)
-                .attempt(1)
-                .errorCode(errCode)
-                .errorMessage(errMsg)
-                .occurredAt(OffsetDateTime.now())
-                .build();
+        StatusEventDto event = new StatusEventDto(
+                id,
+                NotificationType.WHATSAPP,
+                NotificationStatus.valueOf(status),
+                1,
+                errCode,
+                errMsg,
+                null,
+                OffsetDateTime.now()
+        );
 
-        rabbitTemplate.convertAndSend("x.status", "status.updates", event);
+
+        rabbitTemplate.convertAndSend(
+                appProperties.getRabbit().getExchangeStatus(),
+                "status.whatsapp",
+                event);
         log.info("Status update sent to Gateway: {} for ID: {}", status, id);
     }
 }

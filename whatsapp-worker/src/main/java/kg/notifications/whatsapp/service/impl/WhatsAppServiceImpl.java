@@ -3,10 +3,10 @@ package kg.notifications.whatsapp.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kg.notifications.whatsapp.config.AppProperties;
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
+import kg.notifications.whatsapp.dto.NotificationCommandDto; // Используем новый DTO
 import kg.notifications.whatsapp.exception.InvalidMessageException;
 import kg.notifications.whatsapp.exception.WhatsAppApiException;
-import kg.notifications.whatsapp.service.NotificationStatusService;
+import kg.notifications.whatsapp.listener.StatusEventPublisher;
 import kg.notifications.whatsapp.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,11 +29,11 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     private final RestTemplate restTemplate;
     private final AppProperties props;
     private final ObjectMapper objectMapper;
-    private final NotificationStatusService statusService;
+    private final StatusEventPublisher statusService;
 
     @Override
-    public void sendMessage(WhatsAppNotificationMessage message) {
-        log.debug("Starting WhatsApp send process for notification: {}", message.getNotificationId());
+    public void sendMessage(NotificationCommandDto message) {
+        log.debug("Starting WhatsApp send process for notification: {}", message.notificationId());
 
         try {
             validateMessage(message);
@@ -42,7 +42,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             MultiValueMap<String, String> body = createRequestBody(message);
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            log.info("Sending WhatsApp message via Twilio to {}", message.getRecipient());
+            log.info("Sending WhatsApp message via Twilio to {}", message.recipient());
             ResponseEntity<String> response = restTemplate.postForEntity(
                     props.getApi().getBaseUrl(),
                     request,
@@ -58,15 +58,15 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (ResourceAccessException e) {
             handleNetworkError(message, e);
         } catch (InvalidMessageException e) {
-            log.error("Validation failed for notification {}: {}", message.getNotificationId(), e.getMessage());
+            log.error("Validation failed for notification {}: {}", message.notificationId(), e.getMessage());
             throw e;
         } catch (Exception e) {
             handleUnexpectedError(message, e);
         }
     }
 
-    private void validateMessage(WhatsAppNotificationMessage message) {
-        String phone = message.getRecipient();
+    private void validateMessage(NotificationCommandDto message) {
+        String phone = message.recipient();
         if (phone == null || phone.isBlank()) {
             throw new InvalidMessageException("Recipient phone is required");
         }
@@ -83,7 +83,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         return headers;
     }
 
-    private MultiValueMap<String, String> createRequestBody(WhatsAppNotificationMessage message) {
+    private MultiValueMap<String, String> createRequestBody(NotificationCommandDto message) {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 
         String fromNumber = props.getApi().getFromNumber();
@@ -92,23 +92,49 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         }
 
         body.add("From", fromNumber);
-        body.add("To", ensureWhatsappPrefix(message.getRecipient()));
-        // ВНИМАНИЕ: Если в DTO поле называется message, используйте getMessage()
-        body.add("Body", message.getMessage());
+        body.add("To", ensureWhatsappPrefix(message.recipient()));
+        // В рекорде используем .text() вместо .getText()
+        body.add("Body", message.text());
         return body;
     }
 
-    private void handleResponse(WhatsAppNotificationMessage message, ResponseEntity<String> response) {
+    private void handleResponse(NotificationCommandDto message, ResponseEntity<String> response) {
         if (response.getStatusCode().is2xxSuccessful()) {
             String sid = extractMessageId(response.getBody());
-            log.info("Successfully sent notification {} to Twilio. SID: {}", message.getNotificationId(), sid);
-            statusService.sendSuccessStatus(message, sid);
+            log.info("Successfully sent notification {} to Twilio. SID: {}", message.notificationId(), sid);
+
+            // Здесь statusService тоже должен принимать NotificationCommandDto
+            statusService.publishSent(message, sid);
         } else {
             throw new WhatsAppApiException(
                     "Twilio API returned non-success: " + response.getStatusCode(),
                     response.getStatusCode().is5xxServerError()
             );
         }
+    }
+
+    // Методы обработки ошибок (Client/Server/Network) также нужно обновить,
+    // чтобы они принимали NotificationCommandDto в аргументах
+    private void handleClientError(NotificationCommandDto message, HttpClientErrorException e) {
+        String body = e.getResponseBodyAsString();
+        log.error("Twilio Client Error ({}): {}", e.getStatusCode(), body);
+        boolean retryable = (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS);
+        throw new WhatsAppApiException("Twilio client error: " + e.getStatusCode(), retryable);
+    }
+
+    private void handleServerError(NotificationCommandDto message, HttpServerErrorException e) {
+        log.error("Twilio Server Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+        throw new WhatsAppApiException("Twilio server error", true);
+    }
+
+    private void handleNetworkError(NotificationCommandDto message, ResourceAccessException e) {
+        log.error("Network/Timeout error: {}", e.getMessage());
+        throw new WhatsAppApiException("Twilio connectivity error", true);
+    }
+
+    private void handleUnexpectedError(NotificationCommandDto message, Exception e) {
+        log.error("Unexpected error for {}: {}", message.notificationId(), e.getMessage());
+        throw new WhatsAppApiException("Internal worker error: " + e.getMessage(), false);
     }
 
     private String extractMessageId(String responseBody) {
@@ -119,28 +145,6 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             log.warn("Could not parse Twilio response JSON: {}", e.getMessage());
             return "unknown";
         }
-    }
-
-    private void handleClientError(WhatsAppNotificationMessage message, HttpClientErrorException e) {
-        String body = e.getResponseBodyAsString();
-        log.error("Twilio Client Error ({}): {}", e.getStatusCode(), body);
-        boolean retryable = (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS);
-        throw new WhatsAppApiException("Twilio client error: " + e.getStatusCode(), retryable);
-    }
-
-    private void handleServerError(WhatsAppNotificationMessage message, HttpServerErrorException e) {
-        log.error("Twilio Server Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-        throw new WhatsAppApiException("Twilio server error", true);
-    }
-
-    private void handleNetworkError(WhatsAppNotificationMessage message, ResourceAccessException e) {
-        log.error("Network/Timeout error: {}", e.getMessage());
-        throw new WhatsAppApiException("Twilio connectivity error", true);
-    }
-
-    private void handleUnexpectedError(WhatsAppNotificationMessage message, Exception e) {
-        log.error("Unexpected error for {}: {}", message.getNotificationId(), e.getMessage());
-        throw new WhatsAppApiException("Internal worker error: " + e.getMessage(), false);
     }
 
     private String ensureWhatsappPrefix(String number) {

@@ -60,6 +60,11 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue statusQueueGateway() {
+        return new Queue(appProperties.getRabbit().getQueueStatusGateway(), true);
+    }
+
+    @Bean
     public Binding emailBinding(Queue emailQueue, DirectExchange notificationExchange) {
         return BindingBuilder.bind(emailQueue)
                 .to(notificationExchange)

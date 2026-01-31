@@ -65,6 +65,11 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue statusQueueGateway() {
+        return new Queue(props.getRabbit().getQueueStatusGateway(), true);
+    }
+
+    @Bean
     public Binding bindingTelegram(Queue telegramQueue, DirectExchange notificationExchange) {
         return BindingBuilder.bind(telegramQueue)
                 .to(notificationExchange)
@@ -76,6 +81,13 @@ public class RabbitConfig {
         return BindingBuilder.bind(telegramRegistrationQueue)
                 .to(notificationExchange)
                 .with(appProperties.getRabbit().getRoutingTelegramRegistration());
+    }
+
+    @Bean
+    public Binding statusBinding() {
+        return BindingBuilder.bind(statusQueueGateway())
+                .to(statusExchange())
+                .with("status.*");
     }
 
     @Bean

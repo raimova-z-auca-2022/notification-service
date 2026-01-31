@@ -9,32 +9,39 @@ spring:
     password: ${RABBIT_PASS:guest}
     listener:
       simple:
-        acknowledge-mode: manual
-        prefetch: 10
-        retry:
-          enabled: false
+        missing-queues-fatal: false
+        acknowledge-mode: auto
 
 server:
   port: ${SERVER_PORT:8081}
 
 app:
-  whatsapp:
-    api:
-      # Twilio WhatsApp API URL
-      base-url: https://api.twilio.com/2010-04-01/Accounts/AC4a0e9d8445e0e4ab389e984268d2af83/Messages.json
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
 
-      # ВАШ ПРАВИЛЬНЫЙ ТОКЕН (тот что вы сгенерировали):
-      token: Basic QUM0YTBlOWQ4NDQ1ZTBlNGFiMzg5ZTk4NDI2OGQyYWY4Mzo5OTFkMjQ1YWYzYjc0NGU1MzRjYWU5YzJlYWU0ZDNhYg==
-      from-number: "whatsapp:+14155238886"  # ← ДОБАВЬТЕ ЭТО
-      timeout-ms: 30000
-      max-retries: 3
+    routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
+    queueWhatsapp: ${QUEUE_WHATSAPP:q.notification.whatsapp}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
 
-    queue:
-      name: q.notification.whatsapp  # ← должно совпадать с именем очереди
-      dlq: ns.whatsapp.dlq
+    whatsappRetryQueues:
+      - ${WHATSAPP_RETRY_Q1:ns.whatsapp.retry.5s}
+      - ${WHATSAPP_RETRY_Q2:ns.whatsapp.retry.30s}
+      - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
+    whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
 
-    retry:
-      delays: [ "5s", "30s", "60s", "300s", "900s" ]
+
+  api:
+    # Twilio WhatsApp API URL
+    base-url: https://api.twilio.com/2010-04-01/Accounts/AC4a0e9d8445e0e4ab389e984268d2af83/Messages.json
+
+    # ВАШ ПРАВИЛЬНЫЙ ТОКЕН (тот что вы сгенерировали):
+    token: Basic QUM0YTBlOWQ4NDQ1ZTBlNGFiMzg5ZTk4NDI2OGQyYWY4Mzo5OTFkMjQ1YWYzYjc0NGU1MzRjYWU5YzJlYWU0ZDNhYg==
+    from-number: "whatsapp:+14155238886"  # ← ДОБАВЬТЕ ЭТО
+    timeout-ms: 30000
+    max-retries: 3
+
+
 
 logging:
   level:

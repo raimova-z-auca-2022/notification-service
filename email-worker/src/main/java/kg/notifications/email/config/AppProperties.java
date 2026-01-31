@@ -22,6 +22,7 @@ public class AppProperties {
         private String routingEmail;
 
         private String queueEmail;
+        private String queueStatusGateway;
 
         private List<String> emailRetryQueues = new ArrayList<>();
         private String emailDlq;

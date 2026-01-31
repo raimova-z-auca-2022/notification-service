@@ -7,30 +7,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
-@ConfigurationProperties(prefix = "app.whatsapp")
+@ConfigurationProperties(prefix = "app")
 @Data
 public class AppProperties {
     // Поля должны быть ПРЯМЫМИ наследниками app.whatsapp
     private Api api = new Api();
-    private Queue queue = new Queue();
-    private Retry retry = new Retry();
+    private Rabbit rabbit = new Rabbit();
 
     @Data
     public static class Api {
         private String baseUrl;
         private String token;
-        private String fromNumber; // Spring замапит from-number сюда
+        private String fromNumber;
         private int timeoutMs;
     }
 
     @Data
-    public static class Queue {
-        private String name;
-        private String dlq;
-    }
+    public static class Rabbit {
+        private String exchangeNotification;
+        private String exchangeStatus;
 
-    @Data
-    public static class Retry {
-        private List<String> delays = new ArrayList<>();
+        private String queueStatusGateway;
+
+        private String routingWhatsapp;
+        private String queueWhatsapp;
+        private List<String> whatsappRetryQueues = new ArrayList<>();
+        private String whatsappDlq;
     }
 }

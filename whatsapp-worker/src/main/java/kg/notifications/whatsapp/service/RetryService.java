@@ -1,8 +1,8 @@
 package kg.notifications.whatsapp.service;
 
-import kg.notifications.whatsapp.dto.WhatsAppNotificationMessage;
-import org.springframework.amqp.core.Message;
+
+import kg.notifications.whatsapp.dto.NotificationCommandDto;
 
 public interface RetryService {
-    void scheduleRetry(Message originalMessage, WhatsAppNotificationMessage notificationMessage, int nextRetryCount);
+    void handleError(NotificationCommandDto message, Integer currentRetryCount, Throwable ex);
 }
