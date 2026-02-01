@@ -5,6 +5,7 @@ import kg.notifications.gateway.dto.NotificationStatus;
 import kg.notifications.gateway.dto.NotificationType;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 public interface NotificationRepository {
@@ -29,4 +30,5 @@ public interface NotificationRepository {
                                String providerMessageId);
 
     void markFailed(UUID id, String errorCode, String errorMessage);
+    List<NotificationResponse> findAll(int limit, int offset, NotificationType type, NotificationStatus status, String recipient);
 }

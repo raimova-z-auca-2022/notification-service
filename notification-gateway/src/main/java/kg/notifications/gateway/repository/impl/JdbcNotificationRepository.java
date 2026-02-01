@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 
 @Repository
 @RequiredArgsConstructor
@@ -64,5 +66,35 @@ public class JdbcNotificationRepository
                 "UPDATE notifications SET status='FAILED', last_error_code=?, last_error_message=? WHERE id=?",
                 errorCode, errorMessage, id
         );
+    }
+
+    @Override
+    public List<NotificationResponse> findAll(int limit, int offset, NotificationType type, NotificationStatus status, String recipient) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM notifications");
+        List<Object> params = new ArrayList<>();
+        List<String> where = new ArrayList<>();
+
+        if (type != null) {
+            where.add("type = ?");
+            params.add(type.name());
+        }
+        if (status != null) {
+            where.add("status = ?");
+            params.add(status.name());
+        }
+        if (recipient != null && !recipient.isBlank()) {
+            where.add("recipient ILIKE ?");
+            params.add("%" + recipient + "%");
+        }
+
+        if (!where.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", where));
+        }
+
+        sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+
+        return jdbcTemplate.query(sql.toString(), mapper, params.toArray());
     }
 }

@@ -5,6 +5,8 @@ import kg.notifications.gateway.dto.BroadcastRequest; // Импорт
 import kg.notifications.gateway.dto.NotificationCreateRequest;
 import kg.notifications.gateway.dto.NotificationCreateResponse;
 import kg.notifications.gateway.dto.NotificationResponse;
+import kg.notifications.gateway.dto.NotificationStatus;
+import kg.notifications.gateway.dto.NotificationType;
 import kg.notifications.gateway.exception.BadRequestException;
 import kg.notifications.gateway.exception.NotFoundException;
 import kg.notifications.gateway.messaging.NotificationPublisher;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional; // Желате
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -97,6 +100,13 @@ public class NotificationServiceImpl implements NotificationService {
             // Вызываем метод create (реюзаем логику)
             this.create(singleRequest, uniqueKey);
         }
+    }
+
+    @Override
+    public List<NotificationResponse> list(int limit, int offset, NotificationType type, NotificationStatus status, String recipient) {
+        int safeLimit = Math.min(Math.max(limit, 1), 200);
+        int safeOffset = Math.max(offset, 0);
+        return notificationRepository.findAll(safeLimit, safeOffset, type, status, recipient);
     }
 
     @Override
