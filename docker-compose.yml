@@ -199,6 +199,9 @@ services:
 
     networks:
       - ns_net
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
   whatsapp-worker:
     build:
       context: ./whatsapp-worker
@@ -220,6 +223,9 @@ services:
       STATUS_ROUTING_KEY: "status.whatsapp"
     networks:
       - ns_net
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
 networks:
   ns_net:
