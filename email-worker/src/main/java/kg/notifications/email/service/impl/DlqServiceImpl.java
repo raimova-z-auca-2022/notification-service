@@ -19,8 +19,12 @@ public class DlqServiceImpl implements DlqService {
 
     @Override
     public void sendToDlq(Object payload, String dlqQueueName, String originalQueue, String exceptionMsg) {
-        log.error("Moving message to DLQ: {}. Original Queue: {}. Error: {}",
-                dlqQueueName, originalQueue, exceptionMsg);
+        if (payload == null || dlqQueueName == null || dlqQueueName.isBlank()) {
+            log.error("DLQ sendToDlq called with invalid parameters: dlq={}, payload=null:{}", dlqQueueName, payload == null);
+            return;
+        }
+        
+        log.error("Moving message to DLQ: {}. Original Queue: {}. Error: {}", dlqQueueName, originalQueue, exceptionMsg);
 
         try {
             rabbitTemplate.convertAndSend(dlqQueueName, payload, message -> {
@@ -30,7 +34,7 @@ public class DlqServiceImpl implements DlqService {
                 return message;
             });
         } catch (Exception e) {
-            log.error("CRITICAL: Failed to send message to DLQ! Payload: {}", payload, e);
+            log.error("CRITICAL: Failed to send message to DLQ! DLQ={}, originalQueue={}", dlqQueueName, originalQueue, e);
         }
     }
 }

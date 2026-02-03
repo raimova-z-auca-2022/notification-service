@@ -25,21 +25,22 @@ public class EmailRetryServiceImpl implements EmailRetryService<NotificationComm
 
     @Override
     public void handleError(NotificationCommandDto dto, Integer currentRetryCount, Throwable ex) {
+        if (dto == null || ex == null) {
+            log.warn("Retry handler called with null parameters");
+            return;
+        }
+        
         int attempt = (currentRetryCount == null) ? 0 : currentRetryCount;
         int nextAttempt = attempt + 1;
-
+        
         List<String> retryQueues = appProperties.getRabbit().getEmailRetryQueues();
-
-        if (retryQueues != null && nextAttempt <= retryQueues.size()) {
+        
+        if (shouldRetry(nextAttempt, retryQueues)) {
             String targetQueue = retryQueues.get(nextAttempt - 1);
-
-            log.warn("Email retry #{} triggered for ID {}. Sending to: {}. Error: {}",
-                    nextAttempt, dto.notificationId(), targetQueue, ex.getMessage());
-
+            log.warn("Email retry #{} for notificationId={}. Queue={}", nextAttempt, dto.notificationId(), targetQueue);
             sendToRetryQueue(dto, targetQueue, nextAttempt, ex.getMessage());
         } else {
-            log.error("Email retries exhausted for ID {}. Moving to DLQ.", dto.notificationId());
-
+            log.error("Email retries exhausted for notificationId={} after {} attempts", dto.notificationId(), nextAttempt);
             dlqService.sendToDlq(
                     dto,
                     appProperties.getRabbit().getEmailDlq(),
@@ -47,6 +48,10 @@ public class EmailRetryServiceImpl implements EmailRetryService<NotificationComm
                     ex.getMessage()
             );
         }
+    }
+    
+    private boolean shouldRetry(int nextAttempt, List<String> retryQueues) {
+        return retryQueues != null && nextAttempt <= retryQueues.size();
     }
 
     private void sendToRetryQueue(NotificationCommandDto dto, String queue, int retryCount, String error) {

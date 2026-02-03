@@ -11,6 +11,7 @@ import kg.notifications.telegram.repository.impl.JdbcTelegramUserRepository;
 import kg.notifications.telegram.service.TelegramService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -79,6 +80,7 @@ public class TelegramServiceImpl
     // ===================== interface methods =====================
 
     @Override
+    @Transactional
     public void handleRegistration(RegistrationCommandDto cmd) {
         log.info("Processing registration link request: {}", cmd.linkCode());
 
@@ -88,23 +90,25 @@ public class TelegramServiceImpl
         request.setExpiresAt(cmd.expiresAt());
 
         registrationRepo.save(request);
+        log.debug("Registration request saved with token={}", cmd.linkCode());
     }
 
     @Override
+    @Transactional
     public void sendNotification(NotificationCommandDto dto) {
+        if (dto == null || dto.recipient() == null || dto.recipient().isBlank()) {
+            log.warn("Invalid notification command: null or empty recipient");
+            return;
+        }
+        
+        log.debug("Sending notification to {}", dto.recipient());
         statusPublisher.publishProcessing(dto);
 
         String normalizedPhone = normalizePhone(dto.recipient());
-
         List<TelegramUser> users = userRepo.findAllByPhoneNumber(normalizedPhone);
 
         if (users.isEmpty()) {
-//            statusPublisher.publishFailed(dto, "TELEGRAM_SEND_ERROR", e.getMessage());
-            log.warn(
-                    "Notification {} skipped: no Telegram user for phone {}",
-                    dto.notificationId(),
-                    normalizedPhone
-            );
+            log.warn("Notification {} skipped: no Telegram user for phone={}", dto.notificationId(), normalizedPhone);
             return;
         }
 
@@ -112,9 +116,10 @@ public class TelegramServiceImpl
             try {
                 execute(new SendMessage(user.getChatId().toString(), dto.text()));
                 statusPublisher.publishSent(dto, null);
+                log.debug("Message sent to chatId={}", user.getChatId());
             } catch (TelegramApiException e) {
+                log.error("Failed to send notification {} to {}: {}", dto.notificationId(), user.getChatId(), e.getMessage(), e);
                 statusPublisher.publishFailed(dto, "TELEGRAM_SEND_ERROR", e.getMessage());
-                log.error("Failed to send notification {}", dto.notificationId(), e);
             }
         }
     }
@@ -124,6 +129,7 @@ public class TelegramServiceImpl
     private void handleStartCommand(Long chatId, String text) {
         String[] parts = text.split(" ");
         if (parts.length != 2) {
+            log.debug("Invalid /start command format: {}", text);
             sendText(chatId, "Пожалуйста, используйте ссылку из приложения.");
             return;
         }
@@ -132,6 +138,7 @@ public class TelegramServiceImpl
         Optional<RegistrationRequest> reqOpt = registrationRepo.findByToken(token);
 
         if (reqOpt.isEmpty() || reqOpt.get().getExpiresAt().isBefore(LocalDateTime.now())) {
+            log.warn("Invalid or expired registration token: {}", token);
             sendText(chatId, "⛔ Ссылка недействительна или устарела.");
             return;
         }
@@ -141,6 +148,7 @@ public class TelegramServiceImpl
 
     private void handleContact(Long chatId, Contact contact) {
         if (!contact.getUserId().equals(chatId)) {
+            log.warn("Contact user ID {} does not match chat ID {}", contact.getUserId(), chatId);
             sendText(chatId, "⛔ Пожалуйста, отправьте СВОЙ контакт.");
             return;
         }
@@ -155,6 +163,7 @@ public class TelegramServiceImpl
         user.setActive(true);
 
         userRepo.save(user);
+        log.info("Telegram user registered: chatId={}, phone={}", chatId, phone);
 
         sendTextWithRemoveKeyboard(chatId, "✅ Номер " + phone + " успешно привязан!");
     }

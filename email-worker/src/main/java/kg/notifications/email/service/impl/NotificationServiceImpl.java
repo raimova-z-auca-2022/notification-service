@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,28 +19,34 @@ public class NotificationServiceImpl implements NotificationService {
     private final StatusEventPublisher statusPublisher;
 
     @Override
+    @Transactional
     public void processEmailNotification(NotificationCommandDto cmd) {
-
-        statusPublisher.publishProcessing(cmd);
-
+        log.debug("Processing email notification for {}", cmd.notificationId());
+        
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(cmd.recipient());
-            message.setSubject("Notification");
-            message.setText(cmd.text());
-
+            statusPublisher.publishProcessing(cmd);
+            
+            SimpleMailMessage message = buildMailMessage(cmd);
             mailSender.send(message);
-
+            
             statusPublisher.publishSent(cmd, null);
-
             log.info("EMAIL notification {} sent successfully", cmd.notificationId());
-
+            
         } catch (Exception e) {
-
-            statusPublisher.publishFailed(cmd, "EMAIL_SEND_ERROR", e.getMessage());
-
-            log.error("EMAIL notification {} failed", cmd.notificationId(), e);
-
+            log.error("EMAIL notification {} send failed: {}", cmd.notificationId(), e.getMessage(), e);
+            try {
+                statusPublisher.publishFailed(cmd, "EMAIL_SEND_ERROR", e.getMessage());
+            } catch (Exception statusEx) {
+                log.error("Failed to publish failure status for {}: {}", cmd.notificationId(), statusEx.getMessage(), statusEx);
+            }
         }
+    }
+    
+    private SimpleMailMessage buildMailMessage(NotificationCommandDto cmd) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(cmd.recipient());
+        message.setSubject("Notification");
+        message.setText(cmd.text());
+        return message;
     }
 }

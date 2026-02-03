@@ -21,7 +21,7 @@ public class NotificationPublisher {
 
     public boolean publish(NotificationCommandDto dto) {
         String routingKey = resolveRoutingKey(dto.type());
-        CorrelationData correlationData = new CorrelationData(dto.notificationId());
+        CorrelationData correlation = new CorrelationData(dto.notificationId());
 
         rabbitTemplate.convertAndSend(
                 props.getRabbit().getExchangeNotification(),
@@ -32,11 +32,11 @@ public class NotificationPublisher {
                     message.getMessageProperties().setCorrelationId(dto.notificationId());
                     return message;
                 },
-                correlationData
+                correlation
         );
 
         try {
-            CorrelationData.Confirm confirm = correlationData.getFuture()
+            CorrelationData.Confirm confirm = correlation.getFuture()
                     .get(props.getPublish().getConfirmTimeoutMs(), TimeUnit.MILLISECONDS);
             if (confirm == null) {
                 log.warn("Publish confirm is null for notificationId={}", dto.notificationId());
@@ -58,7 +58,11 @@ public class NotificationPublisher {
         return switch (type) {
             case EMAIL -> props.getRabbit().getRoutingEmail();
             case TELEGRAM -> props.getRabbit().getRoutingTelegram();
-            case WHATSAPP -> "whatsapp"; // Используем фиксированный routing key
+            case WHATSAPP -> {
+                String configured = props.getRabbit().getRoutingWhatsapp();
+                if (configured != null && !configured.isBlank()) yield configured;
+                yield "whatsapp";
+            }
         };
     }
 }

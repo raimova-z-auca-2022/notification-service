@@ -15,8 +15,8 @@ import kg.notifications.gateway.repository.impl.JdbcNotificationEventRepository;
 import kg.notifications.gateway.repository.impl.JdbcNotificationRepository;
 import kg.notifications.gateway.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // Желательно добавить транзакционность
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -25,6 +25,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NotificationServiceImpl implements NotificationService {
 
     private final JdbcNotificationRepository notificationRepository;
@@ -33,18 +34,21 @@ public class NotificationServiceImpl implements NotificationService {
     private final AppProperties props;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public NotificationCreateResponse create(NotificationCreateRequest request, String idempotencyKey) {
-        // Твоя существующая логика создания одиночного уведомления (без изменений)
         if (props.getIdempotency().isRequired() && (idempotencyKey == null || idempotencyKey.isBlank())) {
             throw new BadRequestException("Idempotency-Key header is required");
         }
 
-        Optional<NotificationResponse> existing = notificationRepository.findByIdempotencyKey(idempotencyKey);
-        if (existing.isPresent()) {
-            return new NotificationCreateResponse(existing.get().id());
+        Optional<NotificationResponse> existingNotification = notificationRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingNotification.isPresent()) {
+            log.debug("Idempotent create: returning existing notification id={}", existingNotification.get().id());
+            return new NotificationCreateResponse(existingNotification.get().id());
         }
 
         UUID id = UUID.randomUUID();
+
+        // Persist initial notification record and created event
         notificationRepository.insertNew(id, request.type(), request.recipient(), request.text(), idempotencyKey);
         eventRepository.insertEvent(id, "CREATED", "NEW", 0, null, null, null);
 
@@ -59,6 +63,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         boolean published = publisher.publish(cmd);
         if (!published) {
+            log.warn("Publish failed for notificationId={}", id);
             notificationRepository.markFailed(id, "PUBLISH_FAILED", "RabbitMQ publish confirm not received");
             eventRepository.insertEvent(id, "PUBLISH_FAILED", "FAILED", 0, "PUBLISH_FAILED", "RabbitMQ publish confirm not received", null);
             return new NotificationCreateResponse(id.toString());
@@ -67,37 +72,30 @@ public class NotificationServiceImpl implements NotificationService {
         notificationRepository.markPublished(id);
         eventRepository.insertEvent(id, "PUBLISHED", "PUBLISHED", 0, null, null, null);
 
+        log.debug("Notification {} created and published", id);
         return new NotificationCreateResponse(id.toString());
     }
 
     @Override
     public void sendBroadcast(BroadcastRequest request, String idempotencyKey) {
-        // 1. Валидация (логика теперь здесь, а не в контроллере)
         if (request.getRecipients() == null || request.getRecipients().isEmpty()) {
             throw new BadRequestException("Список получателей не может быть пустым");
         }
 
-        // 2. Генерация общего ID пачки
         String batchId = (idempotencyKey != null && !idempotencyKey.isBlank())
                 ? idempotencyKey
                 : UUID.randomUUID().toString();
 
-        // 3. Логирование (опционально)
-        System.out.println(">>> Service: Starting broadcast for " + request.getRecipients().size() + " recipients.");
+        log.info("Starting broadcast for {} recipients (batchId={})", request.getRecipients().size(), batchId);
 
-        // 4. Цикл рассылки
         for (String recipient : request.getRecipients()) {
-            // Создаем объект Record через конструктор!
             NotificationCreateRequest singleRequest = new NotificationCreateRequest(
                     request.getType(),
                     recipient,
                     request.getText()
             );
 
-            // Формируем уникальный ключ: "batchId-phone"
             String uniqueKey = batchId + "-" + recipient;
-
-            // Вызываем метод create (реюзаем логику)
             this.create(singleRequest, uniqueKey);
         }
     }

@@ -22,14 +22,23 @@ public class EmailEventListener {
     public void handle(NotificationCommandDto cmd,
                        @Header(required = false, name = "x-retries-count") Integer retryCount,
                        @Header(name = AmqpHeaders.CORRELATION_ID, required = false) String correlationId) {
-
-        log.info("Received email notification {}, retry count: {}", cmd.notificationId(), retryCount, correlationId);
-
+        
+        if (cmd == null) {
+            log.warn("Received null notification command");
+            return;
+        }
+        
+        log.debug("Received email notification {}, retryCount={}, correlationId={}", cmd.notificationId(), retryCount, correlationId);
+        
         try {
             notificationService.processEmailNotification(cmd);
         } catch (Exception e) {
-            log.error("Failed to process email: {}", e.getMessage());
-            retryService.handleError(cmd, retryCount, e);
+            log.error("Unhandled exception processing email for {}: {}", cmd.notificationId(), e.getMessage(), e);
+            try {
+                retryService.handleError(cmd, retryCount, e);
+            } catch (Exception retryEx) {
+                log.error("Failed to trigger retry for {}: {}", cmd.notificationId(), retryEx.getMessage(), retryEx);
+            }
         }
     }
 }

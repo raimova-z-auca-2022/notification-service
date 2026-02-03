@@ -2,8 +2,8 @@ package kg.notifications.gateway.exception;
 
 import java.time.OffsetDateTime;
 
-public record ApiError(
+public record ErrorResponse(
         String message,
-        String code,
+        String error,
         OffsetDateTime timestamp
 ) {}

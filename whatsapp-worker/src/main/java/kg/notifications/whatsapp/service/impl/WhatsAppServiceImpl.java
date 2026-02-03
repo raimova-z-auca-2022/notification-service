@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
@@ -32,7 +33,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     private final StatusEventPublisher statusService;
 
     @Override
+    @Transactional
     public void sendMessage(NotificationCommandDto message) {
+        if (message == null) {
+            log.warn("sendMessage called with null message");
+            return;
+        }
+        
         log.debug("Starting WhatsApp send process for notification: {}", message.notificationId());
 
         try {
@@ -66,6 +73,9 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     }
 
     private void validateMessage(NotificationCommandDto message) {
+        if (message == null) {
+            throw new InvalidMessageException("Message cannot be null");
+        }
         String phone = message.recipient();
         if (phone == null || phone.isBlank()) {
             throw new InvalidMessageException("Recipient phone is required");

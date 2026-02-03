@@ -25,21 +25,22 @@ public class RetryServiceImpl implements RetryService {
 
     @Override
     public void handleError(NotificationCommandDto message, Integer currentRetryCount, Throwable ex) {
+        if (message == null || ex == null) {
+            log.warn("Retry handler called with null parameters");
+            return;
+        }
+        
         int attempt = (currentRetryCount == null) ? 0 : currentRetryCount;
         int nextAttempt = attempt + 1;
 
         List<String> retryQueues = appProperties.getRabbit().getWhatsappRetryQueues();
 
-
-        if (retryQueues != null && nextAttempt <= retryQueues.size()) {
+        if (shouldRetry(nextAttempt, retryQueues)) {
             String targetQueue = retryQueues.get(nextAttempt - 1);
-
-            log.warn("Retry #{} for telegram. Queue: {}. Error: {}", nextAttempt, targetQueue, ex.getMessage());
-
+            log.warn("WhatsApp retry #{} for notificationId={}. Queue={}", nextAttempt, message.notificationId(), targetQueue);
             sendToRetryQueue(message, targetQueue, nextAttempt, ex.getMessage());
         } else {
-            log.error("Retries exhausted for telegram. Sending to DLQ.");
-
+            log.error("WhatsApp retries exhausted for notificationId={} after {} attempts", message.notificationId(), nextAttempt);
             dlqService.sendToDlq(
                     message,
                     appProperties.getRabbit().getWhatsappDlq(),
@@ -47,6 +48,10 @@ public class RetryServiceImpl implements RetryService {
                     ex.getMessage()
             );
         }
+    }
+    
+    private boolean shouldRetry(int nextAttempt, List<String> retryQueues) {
+        return retryQueues != null && nextAttempt <= retryQueues.size();
     }
 
     private void sendToRetryQueue(NotificationCommandDto message, String queue, int retryCount, String error) {
