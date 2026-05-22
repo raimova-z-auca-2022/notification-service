@@ -11,5 +11,6 @@ public interface ScheduledNotificationService {
     ScheduledNotificationResponse getStatus(String id);
     boolean cancelScheduledMessage(String id);
     List<ScheduledNotificationResponse> listPending();
+    List<ScheduledNotificationResponse> listAll(int limit, int offset);
     void sendToNotificationQueue(ScheduledNotificationEntity entity);
 }

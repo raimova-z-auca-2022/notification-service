@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: sms-worker
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    listener:
+      simple:
+        missing-queues-fatal: false
+        acknowledge-mode: auto
+
+server:
+  port: ${SERVER_PORT:8081}
+
+app:
+  rabbit:
+    exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
+    exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
+
+    routingSms: ${ROUTING_SMS:sms}
+    queueSms: ${QUEUE_SMS:q.notification.sms}
+    queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
+
+    smsRetryQueues:
+      - ${SMS_RETRY_Q1:ns.sms.retry.5s}
+      - ${SMS_RETRY_Q2:ns.sms.retry.30s}
+      - ${SMS_RETRY_Q3:ns.sms.retry.60s}
+    smsDlq: ${SMS_DLQ:ns.sms.dlq}
+
+
+  api:
+    # SMS provider API base URL
+    base-url: ${SMS_API_URL:}
+
+    # API token (Basic auth or Bearer depending on provider)
+    token: ${SMS_API_TOKEN:}
+    from-number: ${SMS_FROM_NUMBER:}
+    timeout-ms: 30000
+    max-retries: 3
+
+
+
+logging:
+  level:
+    root: INFO
+    kg.notifications.sms: DEBUG
+    org.springframework.amqp: INFO
+    org.springframework.web.client: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %-5level [%thread] %logger{36} - %msg%n"
+  file:
+    name: logs/sms-worker.log

@@ -206,11 +206,11 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
-  whatsapp-worker:
+  sms-worker:
     build:
-      context: ./whatsapp-worker
+      context: ./sms-worker
       dockerfile: Dockerfile
-    container_name: whatsapp-worker
+    container_name: sms-worker
     depends_on:
       rabbitmq:
         condition: service_healthy

@@ -49,14 +49,12 @@ app:
 
     routingEmail: ${ROUTING_EMAIL:email}
     routingTelegram: ${ROUTING_TELEGRAM:telegram}
-    routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
     routingSms: ${ROUTING_SMS:sms}
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
     routingScheduled: ${ROUTING_SCHEDULED:message.scheduled}
 
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
-    queueWhatsapp: ${QUEUE_WHATSAPP:q.notification.whatsapp}
     queueSms: ${QUEUE_SMS:q.notification.sms}
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
@@ -77,12 +75,6 @@ app:
       - ${TG_RETRY_Q4:q.notification.telegram.retry.900s}
       - ${TG_RETRY_Q5:q.notification.telegram.retry.3600s}
     telegramDlq: ${TG_DLQ:q.notification.telegram.dlq}
-
-    whatsappRetryQueues:
-      - ${WHATSAPP_RETRY_Q1:ns.whatsapp.retry.5s}
-      - ${WHATSAPP_RETRY_Q2:ns.whatsapp.retry.30s}
-      - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
-    whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
 
     smsRetryQueues:
       - ${SMS_RETRY_Q1:ns.sms.retry.5s}

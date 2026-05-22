@@ -2,6 +2,7 @@ package kg.notifications.gateway.controller;
 
 import jakarta.validation.Valid;
 import kg.notifications.gateway.dto.BroadcastRequest;
+import kg.notifications.gateway.dto.MultiBroadcastRequest;
 import kg.notifications.gateway.dto.NotificationCreateRequest;
 import kg.notifications.gateway.dto.NotificationCreateResponse;
 import kg.notifications.gateway.dto.NotificationResponse;
@@ -45,15 +46,22 @@ public class NotificationController {
         return notificationService.getById(id);
     }
 
-    // Чистый метод для рассылки
     @PostMapping("/notifications/broadcast")
     public ResponseEntity<String> sendBroadcast(
             @RequestBody BroadcastRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
-
-        // Вся логика теперь внутри сервиса
         notificationService.sendBroadcast(request, idempotencyKey);
+        return ResponseEntity.ok("Broadcast started for " + request.getRecipients().size() + " recipients.");
+    }
 
-        return ResponseEntity.ok("Рассылка успешно запущена для " + request.getRecipients().size() + " пользователей.");
+    @PostMapping("/notifications/broadcast/multi")
+    public ResponseEntity<String> sendMultiBroadcast(
+            @RequestBody MultiBroadcastRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        notificationService.sendMultiBroadcast(request, idempotencyKey);
+        int total = request.getTypes().size() * request.getRecipients().size();
+        return ResponseEntity.ok("Broadcast started: " + request.getTypes().size()
+                + " channel(s) × " + request.getRecipients().size()
+                + " recipients = " + total + " messages.");
     }
 }

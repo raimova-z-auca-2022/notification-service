@@ -59,6 +59,16 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
     }
 
     @Override
+    public List<ScheduledNotificationResponse> listAll(int limit, int offset) {
+        int safeLimit = Math.min(Math.max(limit, 1), 200);
+        int safeOffset = Math.max(offset, 0);
+        return repository.findAll(safeLimit, safeOffset)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Override
     public void sendToNotificationQueue(ScheduledNotificationEntity entity) {
         NotificationCommandDto command = new NotificationCommandDto(
                 entity.id(),

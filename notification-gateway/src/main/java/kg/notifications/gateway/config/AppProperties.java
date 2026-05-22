@@ -25,14 +25,12 @@ public class AppProperties {
 
         private String routingEmail;
         private String routingTelegram;
-        private String routingWhatsapp; // ТВОЁ
-        private String routingSms; // Новое: маршрут для SMS
+        private String routingSms;
         private String routingTelegramRegistration; // От Айгерим
 
         private String queueEmail;
         private String queueTelegram;
-        private String queueWhatsapp; // ТВОЁ
-        private String queueSms; // Новое: очередь SMS
+        private String queueSms;
         private String queueTelegramRegistration; // От Айгерим
         private String queueStatusGateway;
 
@@ -45,9 +43,7 @@ public class AppProperties {
         private List<String> telegramRetryQueues = new ArrayList<>();
         private String telegramDlq;
 
-        private List<String> whatsappRetryQueues = new ArrayList<>(); // ТВОЁ
-        private String whatsappDlq; // ТВОЁ
-        private List<String> smsRetryQueues = new ArrayList<>(); // Новое
+        private List<String> smsRetryQueues = new ArrayList<>();
         private String smsDlq;
     }
 

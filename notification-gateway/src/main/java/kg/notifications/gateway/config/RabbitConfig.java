@@ -129,8 +129,8 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Queue whatsappQueue() {
-        return new Queue(props.getRabbit().getQueueWhatsapp(), true);
+    public Queue smsQueue() {
+        return new Queue(props.getRabbit().getQueueSms(), true);
     }
 
     @Bean
@@ -167,10 +167,10 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Binding whatsappBinding() {
-        return BindingBuilder.bind(whatsappQueue())
+    public Binding smsBinding() {
+        return BindingBuilder.bind(smsQueue())
                 .to(notificationExchange())
-                .with(props.getRabbit().getRoutingWhatsapp());
+                .with(props.getRabbit().getRoutingSms());
     }
 
     @Bean

@@ -89,6 +89,16 @@ public class ScheduledNotificationRepositoryImpl implements ScheduledNotificatio
     }
 
     @Override
+    public List<ScheduledNotificationEntity> findAll(int limit, int offset) {
+        String sql = """
+            SELECT * FROM scheduled_notifications
+            ORDER BY scheduled_at DESC
+            LIMIT ? OFFSET ?
+            """;
+        return jdbcTemplate.query(sql, rowMapper, limit, offset);
+    }
+
+    @Override
     public boolean cancelScheduled(String id) {
         String sql = """
             UPDATE scheduled_notifications 

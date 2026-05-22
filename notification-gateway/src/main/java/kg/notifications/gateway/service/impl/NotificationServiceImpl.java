@@ -1,7 +1,8 @@
 package kg.notifications.gateway.service.impl;
 
 import kg.notifications.gateway.config.AppProperties;
-import kg.notifications.gateway.dto.BroadcastRequest; // Импорт
+import kg.notifications.gateway.dto.BroadcastRequest;
+import kg.notifications.gateway.dto.MultiBroadcastRequest;
 import kg.notifications.gateway.dto.NotificationCreateRequest;
 import kg.notifications.gateway.dto.NotificationCreateResponse;
 import kg.notifications.gateway.dto.NotificationResponse;
@@ -97,6 +98,33 @@ public class NotificationServiceImpl implements NotificationService {
 
             String uniqueKey = batchId + "-" + recipient;
             this.create(singleRequest, uniqueKey);
+        }
+    }
+
+    @Override
+    public void sendMultiBroadcast(MultiBroadcastRequest request, String idempotencyKey) {
+        if (request.getRecipients() == null || request.getRecipients().isEmpty()) {
+            throw new BadRequestException("Список получателей не может быть пустым");
+        }
+        if (request.getTypes() == null || request.getTypes().isEmpty()) {
+            throw new BadRequestException("Необходимо выбрать хотя бы один канал");
+        }
+
+        String batchId = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyKey
+                : UUID.randomUUID().toString();
+
+        log.info("Starting multi-channel broadcast: channels={} recipients={} batchId={}",
+                request.getTypes(), request.getRecipients().size(), batchId);
+
+        for (NotificationType type : request.getTypes()) {
+            for (String recipient : request.getRecipients()) {
+                NotificationCreateRequest singleRequest = new NotificationCreateRequest(
+                        type, recipient, request.getText()
+                );
+                String uniqueKey = batchId + "-" + type.name() + "-" + recipient;
+                this.create(singleRequest, uniqueKey);
+            }
         }
     }
 

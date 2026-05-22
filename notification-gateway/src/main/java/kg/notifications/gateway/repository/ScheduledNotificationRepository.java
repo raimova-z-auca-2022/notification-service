@@ -20,4 +20,5 @@ public interface ScheduledNotificationRepository {
 
     boolean cancelScheduled(String id);
 
+    List<ScheduledNotificationEntity> findAll(int limit, int offset);
 }

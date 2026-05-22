@@ -49,4 +49,12 @@ public class ScheduledNotificationController {
         List<ScheduledNotificationResponse> response = scheduledService.listPending();
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping
+    public ResponseEntity<List<ScheduledNotificationResponse>> listAll(
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        List<ScheduledNotificationResponse> response = scheduledService.listAll(limit, offset);
+        return ResponseEntity.ok(response);
+    }
 }
