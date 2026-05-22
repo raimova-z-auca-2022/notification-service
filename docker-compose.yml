@@ -226,8 +226,8 @@ services:
       EXCHANGE_STATUS: "x.notification.status"
       STATUS_ROUTING_KEY: "status.sms"
       # SMS provider credentials - set in your environment or .env
-      SMS_API_TOKEN: ${SMS_API_TOKEN:}
-      SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:}
+      SMS_API_TOKEN: ${SMS_API_TOKEN:-}
+      SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:-}
     networks:
       - ns_net
     dns:
