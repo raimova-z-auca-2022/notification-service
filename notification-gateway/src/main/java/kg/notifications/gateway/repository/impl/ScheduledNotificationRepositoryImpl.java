@@ -22,8 +22,8 @@ public class ScheduledNotificationRepositoryImpl implements ScheduledNotificatio
     public void save(ScheduledNotificationEntity entity) {
         String sql = """
             INSERT INTO scheduled_notifications 
-            (id, type, recipient, text, scheduled_at, status, sent_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, type, recipient, text, scheduled_at, status, sent_at, provider_message_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         jdbcTemplate.update(sql,
@@ -34,6 +34,7 @@ public class ScheduledNotificationRepositoryImpl implements ScheduledNotificatio
                 entity.scheduledAt(),
                 entity.status(),
                 entity.sentAt(),
+                entity.providerMessageId(),
                 entity.createdAt(),
                 entity.updatedAt()
         );
@@ -63,16 +64,23 @@ public class ScheduledNotificationRepositoryImpl implements ScheduledNotificatio
     }
 
     @Override
-    public boolean updateStatus(String id, String status, LocalDateTime sentAt) {
+    public List<ScheduledNotificationEntity> findByStatus(String status) {
+        String sql = "SELECT * FROM scheduled_notifications WHERE status = ? ORDER BY scheduled_at ASC";
+        return jdbcTemplate.query(sql, rowMapper, status);
+    }
+
+    @Override
+    public boolean updateStatus(String id, String status, LocalDateTime sentAt, String providerMessageId) {
         String sql = """
             UPDATE scheduled_notifications 
-            SET status = ?, sent_at = ?, updated_at = ?
+            SET status = ?, sent_at = ?, provider_message_id = ?, updated_at = ?
             WHERE id = ? AND status != 'CANCELLED'
             """;
 
         int updated = jdbcTemplate.update(sql,
                 status,
                 sentAt,
+                providerMessageId,
                 LocalDateTime.now(),
                 id
         );
@@ -85,7 +93,7 @@ public class ScheduledNotificationRepositoryImpl implements ScheduledNotificatio
         String sql = """
             UPDATE scheduled_notifications 
             SET status = 'CANCELLED', updated_at = ?
-            WHERE id = ? AND status = 'PENDING'
+            WHERE id = ? AND status IN ('PENDING', 'SCHEDULED')
             """;
 
         int updated = jdbcTemplate.update(sql,

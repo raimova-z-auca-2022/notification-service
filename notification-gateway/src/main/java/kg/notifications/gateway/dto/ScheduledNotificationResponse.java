@@ -10,5 +10,7 @@ public record ScheduledNotificationResponse(
         String text,
         OffsetDateTime scheduledAt,
         LocalDateTime createdAt,
-        String status
+        String status,
+        LocalDateTime sentAt,
+        String providerMessageId
 ) {}

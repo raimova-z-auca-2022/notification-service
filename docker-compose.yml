@@ -127,6 +127,8 @@ services:
         condition: service_healthy
       postgres_email:
         condition: service_healthy
+    ports:
+      - "8081:8081"
     environment:
       SERVER_PORT: 8081
 
@@ -166,6 +168,8 @@ services:
         condition: service_healthy
       postgres_telegram:
         condition: service_healthy
+    ports:
+      - "8082:8082"
     environment:
       SERVER_PORT: 8082
 
@@ -218,9 +222,12 @@ services:
       RABBIT_PORT: 5672
       RABBIT_USER: ${RABBITMQ_USER:-guest}
       RABBIT_PASS: ${RABBITMQ_PASS:-guest}
-      QUEUE_IN: "q.notification.whatsapp"
+      QUEUE_IN: "q.notification.sms"
       EXCHANGE_STATUS: "x.notification.status"
-      STATUS_ROUTING_KEY: "status.whatsapp"
+      STATUS_ROUTING_KEY: "status.sms"
+      # SMS provider credentials - set in your environment or .env
+      SMS_API_TOKEN: ${SMS_API_TOKEN:}
+      SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:}
     networks:
       - ns_net
     dns:

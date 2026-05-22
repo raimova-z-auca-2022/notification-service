@@ -32,9 +32,16 @@ public class ScheduledNotificationController {
     }
 
     @PutMapping("/cancel/{id}")
-    public ResponseEntity<Void> cancel(@PathVariable String id) {
+    public ResponseEntity<ScheduledNotificationResponse> cancel(@PathVariable String id) {
         boolean cancelled = scheduledService.cancelScheduledMessage(id);
-        return cancelled ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        if (!cancelled) return ResponseEntity.notFound().build();
+        ScheduledNotificationResponse updated = scheduledService.getStatus(id);
+        return ResponseEntity.ok(updated);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ScheduledNotificationResponse> deleteCancel(@PathVariable String id) {
+        return cancel(id);
     }
 
     @GetMapping("/pending")

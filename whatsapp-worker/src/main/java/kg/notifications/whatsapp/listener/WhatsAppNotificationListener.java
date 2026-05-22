@@ -27,17 +27,20 @@ public class WhatsAppNotificationListener {
     private final RetryService retryService;
     private final AppProperties appProperties;
 
-    @RabbitListener(queues = "${app.rabbit.queueWhatsapp}")
+    @RabbitListener(queues = "${app.rabbit.queueSms}")
     public void handleNotification(NotificationCommandDto dto,
                                    @Header(required = false, name = "x-retries-count") Integer retryCount,
                                    @Header(name = AmqpHeaders.CORRELATION_ID, required = false) String correlationId) {
-        log.info("Received notification for recipient: {}. Retry count: {}", dto.recipient(), retryCount, correlationId);
+        log.info("Received notification for recipient: {}. Retry count: {}",
+                dto.recipient(),
+                retryCount,
+                correlationId);
 
         try {
             whatsAppService.sendMessage(dto);
             sendStatusUpdate(dto.notificationId().toString(), "SENT", null, null);
         } catch (Exception e) {
-            log.error("Failed to send telegram notification: {}", e.getMessage());
+            log.error("Failed to send whatsapp notification: {}", e.getMessage());
             retryService.handleError(dto, retryCount, e);
             sendStatusUpdate(dto.notificationId().toString(), "PROCESSING", null, null);
         }
@@ -46,7 +49,7 @@ public class WhatsAppNotificationListener {
     private void sendStatusUpdate(String id, String status, String errCode, String errMsg) {
         StatusEventDto event = new StatusEventDto(
                 id,
-                NotificationType.WHATSAPP,
+                NotificationType.SMS,
                 NotificationStatus.valueOf(status),
                 1,
                 errCode,
@@ -58,7 +61,7 @@ public class WhatsAppNotificationListener {
 
         rabbitTemplate.convertAndSend(
                 appProperties.getRabbit().getExchangeStatus(),
-                "status.whatsapp",
+                "status.sms",
                 event);
         log.info("Status update sent to Gateway: {} for ID: {}", status, id);
     }

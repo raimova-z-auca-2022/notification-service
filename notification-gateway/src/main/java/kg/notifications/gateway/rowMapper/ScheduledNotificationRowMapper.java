@@ -23,6 +23,7 @@ public class ScheduledNotificationRowMapper implements RowMapper<ScheduledNotifi
                 rs.getString("status"),
                 rs.getTimestamp("sent_at") != null ?
                         rs.getTimestamp("sent_at").toLocalDateTime() : null,
+                rs.getString("provider_message_id"),
                 rs.getTimestamp("created_at").toLocalDateTime(),
                 rs.getTimestamp("updated_at").toLocalDateTime()
         );

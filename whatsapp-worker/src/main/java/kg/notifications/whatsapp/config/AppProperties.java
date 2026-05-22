@@ -33,5 +33,10 @@ public class AppProperties {
         private String queueWhatsapp;
         private List<String> whatsappRetryQueues = new ArrayList<>();
         private String whatsappDlq;
+
+        private String routingSms;
+        private String queueSms;
+        private List<String> smsRetryQueues = new ArrayList<>();
+        private String smsDlq;
     }
 }

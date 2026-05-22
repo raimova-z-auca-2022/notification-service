@@ -46,7 +46,8 @@ public class EmailNotificationServiceTest {
         emailNotificationService.processEmailNotification(cmd);
 
         // Assert - verify mail sender was called
-        verify(javaMailSender, times(1)).send(any(SimpleMailMessage.class));
+        verify(javaMailSender, times(1))
+                .send(any(SimpleMailMessage.class));
     }
 
     @Test

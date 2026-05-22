@@ -52,7 +52,7 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
 
     @Override
     public List<ScheduledNotificationResponse> listPending() {
-        return repository.findByStatusAndScheduledAtBefore("PENDING", LocalDateTime.now().plusYears(1))
+        return repository.findByStatus("PENDING")
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -118,7 +118,7 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
         return switch (type) {
             case EMAIL -> props.getRabbit().getRoutingEmail();
             case TELEGRAM -> props.getRabbit().getRoutingTelegram();
-            case WHATSAPP -> props.getRabbit().getRoutingWhatsapp();
+            case SMS -> props.getRabbit().getRoutingSms();
             default -> throw new IllegalArgumentException("Unknown type: " + type);
         };
     }
@@ -131,7 +131,9 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
                 entity.text(),
                 entity.scheduledAt(),
                 entity.createdAt(),
-                entity.status()
+                entity.status(),
+                entity.sentAt(),
+                entity.providerMessageId()
         );
     }
 
@@ -149,7 +151,7 @@ public class ScheduledNotificationServiceImpl implements ScheduledNotificationSe
             log.warn("Found {} missed scheduled messages", missed.size());
 
             missed.forEach(entity -> {
-                repository.updateStatus(entity.id(), "MISSED", now);
+                repository.updateStatus(entity.id(), "MISSED", now, null);
 
                 sendToNotificationQueue(entity);
             });

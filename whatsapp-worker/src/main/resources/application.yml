@@ -1,6 +1,6 @@
 spring:
   application:
-    name: whatsapp-worker
+    name: sms-worker
 
   rabbitmq:
     host: ${RABBIT_HOST:localhost}
@@ -20,24 +20,24 @@ app:
     exchangeNotification: ${EXCHANGE_NOTIFICATION:x.notification}
     exchangeStatus: ${EXCHANGE_STATUS:x.notification.status}
 
-    routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
-    queueWhatsapp: ${QUEUE_WHATSAPP:q.notification.whatsapp}
+    routingSms: ${ROUTING_SMS:sms}
+    queueSms: ${QUEUE_SMS:q.notification.sms}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
 
-    whatsappRetryQueues:
-      - ${WHATSAPP_RETRY_Q1:ns.whatsapp.retry.5s}
-      - ${WHATSAPP_RETRY_Q2:ns.whatsapp.retry.30s}
-      - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
-    whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
+    smsRetryQueues:
+      - ${SMS_RETRY_Q1:ns.sms.retry.5s}
+      - ${SMS_RETRY_Q2:ns.sms.retry.30s}
+      - ${SMS_RETRY_Q3:ns.sms.retry.60s}
+    smsDlq: ${SMS_DLQ:ns.sms.dlq}
 
 
   api:
-    # Twilio WhatsApp API URL
-    base-url: https://api.twilio.com/2010-04-01/Accounts/AC4a0e9d8445e0e4ab389e984268d2af83/Messages.json
+    # SMS provider API base URL
+    base-url: ${SMS_API_URL:}
 
-    # ВАШ ПРАВИЛЬНЫЙ ТОКЕН (тот что вы сгенерировали):
-    token: Basic QUM0YTBlOWQ4NDQ1ZTBlNGFiMzg5ZTk4NDI2OGQyYWY4Mzo5OTFkMjQ1YWYzYjc0NGU1MzRjYWU5YzJlYWU0ZDNhYg==
-    from-number: "whatsapp:+14155238886"  # ← ДОБАВЬТЕ ЭТО
+    # API token (Basic auth or Bearer depending on provider)
+    token: ${SMS_API_TOKEN:}
+    from-number: ${SMS_FROM_NUMBER:}
     timeout-ms: 30000
     max-retries: 3
 

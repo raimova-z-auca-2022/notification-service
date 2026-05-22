@@ -12,6 +12,7 @@ public record ScheduledNotificationEntity(
         OffsetDateTime scheduledAt,
         String status,
         LocalDateTime sentAt,
+        String providerMessageId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -23,6 +24,7 @@ public record ScheduledNotificationEntity(
                 request.text(),
                 request.scheduledAt(),
                 "PENDING",
+                null,
                 null,
                 LocalDateTime.now(),
                 LocalDateTime.now()

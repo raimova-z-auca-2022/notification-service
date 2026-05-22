@@ -6,15 +6,15 @@ spring:
     name: notification-gateway
 
   datasource:
-    # ИСПРАВЛЕНО: localhost заменен на имя контейнера postgres_gateway
-    url: jdbc:postgresql://${DB_HOST:postgres_gateway}:${DB_PORT:5432}/${DB_NAME:gateway_db}
+    # ИСПРАВЛЕНО: default to localhost for local runs (can be overridden via DB_HOST env var)
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gateway_db}
     username: ${DB_USERNAME:gateway}
     password: ${DB_PASSWORD:gateway_pass}
     driver-class-name: org.postgresql.Driver
 
   rabbitmq:
-    # ИСПРАВЛЕНО: localhost заменен на имя контейнера rabbitmq
-    host: ${RABBIT_HOST:rabbitmq}
+    # ИСПРАВЛЕНО: default to localhost for local runs (can be overridden via RABBIT_HOST env var)
+    host: ${RABBIT_HOST:localhost}
     port: ${RABBIT_PORT:5672}
     username: ${RABBIT_USER:guest}
     password: ${RABBIT_PASS:guest}
@@ -50,12 +50,14 @@ app:
     routingEmail: ${ROUTING_EMAIL:email}
     routingTelegram: ${ROUTING_TELEGRAM:telegram}
     routingWhatsapp: ${ROUTING_WHATSAPP:whatsapp}
+    routingSms: ${ROUTING_SMS:sms}
     routingTelegramRegistration: ${ROUTING_TG_REG:telegram.registration}
     routingScheduled: ${ROUTING_SCHEDULED:message.scheduled}
 
     queueEmail: ${QUEUE_EMAIL:q.notification.email}
     queueTelegram: ${QUEUE_TELEGRAM:q.notification.telegram}
     queueWhatsapp: ${QUEUE_WHATSAPP:q.notification.whatsapp}
+    queueSms: ${QUEUE_SMS:q.notification.sms}
     queueTelegramRegistration: ${QUEUE_TG_REG:q.telegram.registration}
     queueStatusGateway: ${QUEUE_STATUS_GATEWAY:q.notification.status.gateway}
     queueScheduledMessages: ${QUEUE_SCHEDULED_MESSAGES:q.scheduled.messages}
@@ -82,6 +84,12 @@ app:
       - ${WHATSAPP_RETRY_Q3:ns.whatsapp.retry.60s}
     whatsappDlq: ${WHATSAPP_DLQ:ns.whatsapp.dlq}
 
+    smsRetryQueues:
+      - ${SMS_RETRY_Q1:ns.sms.retry.5s}
+      - ${SMS_RETRY_Q2:ns.sms.retry.30s}
+      - ${SMS_RETRY_Q3:ns.sms.retry.60s}
+    smsDlq: ${SMS_DLQ:ns.sms.dlq}
+
   telegram:
     botToken: ${TELEGRAM_BOT_TOKEN}
     botName: ${TELEGRAM_BOT_NAME:MyCoolNotifier_bot}
@@ -90,3 +98,4 @@ app:
     required: ${IDEMPOTENCY_REQUIRED:true}
   publish:
     confirmTimeoutMs: ${PUBLISH_CONFIRM_TIMEOUT_MS:3000}
+

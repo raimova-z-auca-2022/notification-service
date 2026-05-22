@@ -36,7 +36,8 @@ public class ScheduledMessageConsumer {
                             boolean updated = repository.updateStatus(
                                     entity.id(),
                                     "SENT",
-                                    LocalDateTime.now()
+                                    LocalDateTime.now(),
+                                    null
                             );
 
                             if (updated) {

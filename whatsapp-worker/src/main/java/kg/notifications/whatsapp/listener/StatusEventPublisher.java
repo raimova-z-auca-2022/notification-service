@@ -41,7 +41,7 @@ public class StatusEventPublisher {
     ) {
         StatusEventDto event = new StatusEventDto(
                 cmd.notificationId(),
-                NotificationType.TELEGRAM,
+                NotificationType.SMS,
                 status,
                 cmd.attempt(),
                 errorCode,
@@ -52,7 +52,7 @@ public class StatusEventPublisher {
 
         rabbitTemplate.convertAndSend(
                 appProperties.getRabbit().getExchangeStatus(),
-                "status.whatsapp",
+                "status.sms",
                 event,
                 message -> {
                     message.getMessageProperties().setCorrelationId(cmd.notificationId());
@@ -61,5 +61,3 @@ public class StatusEventPublisher {
         );
     }
 }
-
-

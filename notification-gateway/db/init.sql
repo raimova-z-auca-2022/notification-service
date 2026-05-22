@@ -2,7 +2,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY,
-  type VARCHAR(16) NOT NULL CHECK (type IN ('EMAIL', 'TELEGRAM', 'WHATSAPP')),
+  type VARCHAR(16) NOT NULL CHECK (type IN ('EMAIL', 'TELEGRAM', 'SMS')),
   recipient VARCHAR(255) NOT NULL,
   text TEXT NOT NULL,
 
@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS scheduled_notifications (
     scheduled_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) NOT NULL,
     sent_at TIMESTAMP NULL,
+    provider_message_id VARCHAR(128),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

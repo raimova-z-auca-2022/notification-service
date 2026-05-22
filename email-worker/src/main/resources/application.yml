@@ -5,25 +5,25 @@ spring:
   application:
     name: email-worker
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:notification_service}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:email_db}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:guest}
-    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    host: ${SPRING_RABBITMQ_HOST:${RABBIT_HOST:rabbitmq}}
+    port: ${SPRING_RABBITMQ_PORT:${RABBIT_PORT:5672}}
+    username: ${SPRING_RABBITMQ_USERNAME:${RABBIT_USER:guest}}
+    password: ${SPRING_RABBITMQ_PASSWORD:${RABBIT_PASS:guest}}
     listener:
       simple:
         missing-queues-fatal: false
         acknowledge-mode: auto
 
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:${SMTP_USERNAME:}}
+    password: ${SPRING_MAIL_PASSWORD:${SMTP_PASSWORD:}}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true

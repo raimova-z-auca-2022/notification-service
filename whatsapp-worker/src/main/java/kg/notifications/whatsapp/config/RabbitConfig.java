@@ -25,11 +25,11 @@ public class RabbitConfig {
 
     private final AppProperties appProperties;
 
-    // --- ОЧЕРЕДИ ---
+    // --- QUEUES ---
 
     @Bean
-    public Queue whatsappQueue() {
-        return new Queue(appProperties.getRabbit().getQueueWhatsapp(), true);
+    public Queue smsQueue() {
+        return new Queue(appProperties.getRabbit().getQueueSms(), true);
     }
 
     @Bean
@@ -37,8 +37,7 @@ public class RabbitConfig {
         return new Queue(appProperties.getRabbit().getQueueStatusGateway(), true);
     }
 
-
-    // --- ОБМЕННИКИ ---
+    // --- EXCHANGES ---
 
     @Bean
     public DirectExchange notificationExchange() {
@@ -58,13 +57,13 @@ public class RabbitConfig {
         );
     }
 
-    // --- БИНДИНГИ ---
+    // --- BINDINGS ---
 
     @Bean
-    public Binding whatsappBinding() {
-        return BindingBuilder.bind(whatsappQueue())
+    public Binding smsBinding() {
+        return BindingBuilder.bind(smsQueue())
                 .to(notificationExchange())
-                .with(appProperties.getRabbit().getRoutingWhatsapp());
+                .with(appProperties.getRabbit().getRoutingSms());
     }
 
     @Bean
@@ -77,11 +76,11 @@ public class RabbitConfig {
     // ---------- Retry + DLQ ----------
 
     @Bean
-    public Declarables whatsappRetryTopology() {
+    public Declarables smsRetryTopology() {
         return retryTopology(
-                appProperties.getRabbit().getWhatsappRetryQueues(),
-                appProperties.getRabbit().getWhatsappDlq(),
-                appProperties.getRabbit().getRoutingWhatsapp()
+                appProperties.getRabbit().getSmsRetryQueues(),
+                appProperties.getRabbit().getSmsDlq(),
+                appProperties.getRabbit().getRoutingSms()
         );
     }
 
@@ -118,7 +117,7 @@ public class RabbitConfig {
         return 15000L;
     }
 
-    // --- ИНФРАСТРУКТУРА ---
+    // --- INFRASTRUCTURE ---
 
     @Bean
     public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {

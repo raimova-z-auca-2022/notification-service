@@ -14,7 +14,9 @@ public interface ScheduledNotificationRepository {
 
     List<ScheduledNotificationEntity> findByStatusAndScheduledAtBefore(String status, LocalDateTime beforeTime);
 
-    boolean updateStatus(String id, String status, LocalDateTime sentAt);
+    List<ScheduledNotificationEntity> findByStatus(String status);
+
+    boolean updateStatus(String id, String status, LocalDateTime sentAt, String providerMessageId);
 
     boolean cancelScheduled(String id);
 
