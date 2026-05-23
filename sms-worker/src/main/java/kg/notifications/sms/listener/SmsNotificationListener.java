@@ -1,5 +1,6 @@
 package kg.notifications.sms.listener;
 
+import com.rabbitmq.client.Channel;
 import kg.notifications.sms.config.AppProperties;
 import kg.notifications.sms.dto.NotificationCommandDto;
 import kg.notifications.sms.dto.NotificationStatus;
@@ -15,6 +16,7 @@ import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.time.OffsetDateTime;
 
 @Component
@@ -29,8 +31,10 @@ public class SmsNotificationListener {
 
     @RabbitListener(queues = "${app.rabbit.queueSms}")
     public void handleNotification(NotificationCommandDto dto,
+                                   Channel channel,
+                                   @Header(AmqpHeaders.DELIVERY_TAG) long tag,
                                    @Header(required = false, name = "x-retries-count") Integer retryCount,
-                                   @Header(name = AmqpHeaders.CORRELATION_ID, required = false) String correlationId) {
+                                   @Header(name = AmqpHeaders.CORRELATION_ID, required = false) String correlationId) throws IOException {
         log.info("Received SMS notification for recipient: {}. Retry count: {}",
                 dto.recipient(),
                 retryCount,
@@ -44,6 +48,7 @@ public class SmsNotificationListener {
             retryService.handleError(dto, retryCount, e);
             sendStatusUpdate(dto.notificationId().toString(), "PROCESSING", null, null);
         }
+        channel.basicAck(tag, false);
     }
 
     private void sendStatusUpdate(String id, String status, String errCode, String errMsg) {

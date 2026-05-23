@@ -112,6 +112,7 @@ services:
       EXCHANGE_STATUS: "x.notification.status"
       ROUTING_EMAIL: "email"
       ROUTING_TELEGRAM: "telegram"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_BOT_NAME: "MyCoolNotifier_bot"
 
     networks:
