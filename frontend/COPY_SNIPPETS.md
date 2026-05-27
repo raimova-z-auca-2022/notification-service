@@ -88,5 +88,4 @@ UX notes:
 - Show providerMessageId prominently when available. If not yet available, show notification `ID` and a copy button for that ID.
 - When user navigates away and returns, re-fetch `/pending` so the list is always server-canonical (no local-only state). Optionally cache in localStorage for transient offline UX.
 
-If you 
-want, I can add a minimal HTML page under `notification-gateway/src/main/resources/static/` that demonstrates the scheduled list and copy button and uses the real API endpoints — tell me and I will add a tiny demo UI file and wire it to the endpoints.
+If you want, I can add a minimal HTML page under `notification-gateway/src/main/resources/static/` that demonstrates the scheduled list and copy button and uses the real API endpoints — tell me and I will add a tiny demo UI file and wire it to the endpoints.

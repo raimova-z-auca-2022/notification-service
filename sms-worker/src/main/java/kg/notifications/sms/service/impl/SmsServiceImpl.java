@@ -21,6 +21,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -42,34 +43,114 @@ public class SmsServiceImpl implements SmsService {
 
         log.debug("Starting SMS send for notification: {}", message.notificationId());
 
+        if (props.getApi().isTestMode()) {
+            log.info("[TEST MODE] Skipping real SMS to {}, marking as SENT", message.recipient());
+            statusService.publishSent(message, "test-" + UUID.randomUUID());
+            return;
+        }
+
+        boolean hasSmsc = isSet(props.getApi().getLogin()) && isSet(props.getApi().getPassword());
+        boolean hasTwilio = isSet(props.getApi().getBaseUrl());
+
+        if (!hasSmsc && !hasTwilio) {
+            log.info("[MOCK] SMS to {} — no provider configured, marking as SENT", message.recipient());
+            statusService.publishSent(message, "mock-" + UUID.randomUUID());
+            return;
+        }
+
         try {
             validateMessage(message);
 
-            HttpHeaders headers = createHeaders();
-            MultiValueMap<String, String> body = createRequestBody(message);
-            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-            log.info("Sending SMS via provider to {}", message.recipient());
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    props.getApi().getBaseUrl(),
-                    request,
-                    String.class
-            );
-
-            handleResponse(message, response);
+            if (hasSmsc) {
+                sendViaSmsc(message);
+            } else {
+                sendViaTwilio(message);
+            }
 
         } catch (HttpClientErrorException e) {
-            handleClientError(message, e);
+            log.error("SMS API Client Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new SmsApiException("SMS API client error: " + e.getStatusCode(),
+                    e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS);
         } catch (HttpServerErrorException e) {
-            handleServerError(message, e);
+            log.error("SMS API Server Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new SmsApiException("SMS API server error", true);
         } catch (ResourceAccessException e) {
-            handleNetworkError(message, e);
+            log.error("Network/Timeout error: {}", e.getMessage());
+            throw new SmsApiException("SMS API connectivity error", true);
         } catch (InvalidMessageException e) {
             log.error("Validation failed for notification {}: {}", message.notificationId(), e.getMessage());
             throw e;
         } catch (Exception e) {
-            handleUnexpectedError(message, e);
+            log.error("Unexpected error for {}: {}", message.notificationId(), e.getMessage());
+            throw new SmsApiException("Internal worker error: " + e.getMessage(), false);
         }
+    }
+
+    private void sendViaSmsc(NotificationCommandDto message) {
+        log.info("Sending SMS via SMSC.ru to {}", message.recipient());
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("login", props.getApi().getLogin());
+        body.add("psw", props.getApi().getPassword());
+        body.add("phones", message.recipient());
+        body.add("mes", message.text());
+        body.add("fmt", "3");
+        body.add("charset", "utf-8");
+        if (props.getApi().isTestMode()) {
+            body.add("test", "1");
+            log.info("[TEST MODE] SMS will not actually be delivered");
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "https://smsc.ru/sys/send.php",
+                new HttpEntity<>(body, headers),
+                String.class
+        );
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new SmsApiException("SMSC returned HTTP " + response.getStatusCode(), true);
+        }
+
+        String messageId = extractSmscMessageId(response.getBody(), message);
+        log.info("SMS sent via SMSC.ru for notification {}. ID: {}", message.notificationId(), messageId);
+        statusService.publishSent(message, messageId);
+    }
+
+    private void sendViaTwilio(NotificationCommandDto message) {
+        log.info("Sending SMS via Twilio to {}", message.recipient());
+
+        if (!isSet(props.getApi().getFromNumber())) {
+            throw new InvalidMessageException("SMS FROM number is not configured");
+        }
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("From", props.getApi().getFromNumber());
+        body.add("To", message.recipient());
+        body.add("Body", message.text());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", props.getApi().getToken());
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                props.getApi().getBaseUrl(),
+                new HttpEntity<>(body, headers),
+                String.class
+        );
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new SmsApiException("Twilio returned HTTP " + response.getStatusCode(),
+                    response.getStatusCode().is5xxServerError());
+        }
+
+        String sid = extractTwilioSid(response.getBody());
+        log.info("SMS sent via Twilio for notification {}. SID: {}", message.notificationId(), sid);
+        statusService.publishSent(message, sid);
     }
 
     private void validateMessage(NotificationCommandDto message) {
@@ -82,69 +163,35 @@ public class SmsServiceImpl implements SmsService {
         }
     }
 
-    private HttpHeaders createHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", props.getApi().getToken());
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        return headers;
-    }
-
-    private MultiValueMap<String, String> createRequestBody(NotificationCommandDto message) {
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-
-        String fromNumber = props.getApi().getFromNumber();
-        if (fromNumber == null || fromNumber.isBlank()) {
-            throw new InvalidMessageException("SMS FROM number is not configured");
-        }
-
-        body.add("From", fromNumber);
-        body.add("To", message.recipient());
-        body.add("Body", message.text());
-        return body;
-    }
-
-    private void handleResponse(NotificationCommandDto message, ResponseEntity<String> response) {
-        if (response.getStatusCode().is2xxSuccessful()) {
-            String sid = extractMessageId(response.getBody());
-            log.info("Successfully sent SMS notification {}. SID: {}", message.notificationId(), sid);
-            statusService.publishSent(message, sid);
-        } else {
-            throw new SmsApiException(
-                    "SMS API returned non-success: " + response.getStatusCode(),
-                    response.getStatusCode().is5xxServerError()
-            );
+    private String extractSmscMessageId(String responseBody, NotificationCommandDto message) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            if (root.has("error_code")) {
+                int code = root.path("error_code").asInt();
+                String error = root.path("error").asText("SMSC error");
+                boolean retryable = (code == 3 || code == 9);
+                throw new SmsApiException("SMSC error " + code + ": " + error, retryable);
+            }
+            return root.path("id").asText("unknown");
+        } catch (SmsApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Could not parse SMSC response: {}", e.getMessage());
+            return "unknown";
         }
     }
 
-    private void handleClientError(NotificationCommandDto message, HttpClientErrorException e) {
-        log.error("SMS API Client Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-        boolean retryable = (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS);
-        throw new SmsApiException("SMS API client error: " + e.getStatusCode(), retryable);
-    }
-
-    private void handleServerError(NotificationCommandDto message, HttpServerErrorException e) {
-        log.error("SMS API Server Error ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-        throw new SmsApiException("SMS API server error", true);
-    }
-
-    private void handleNetworkError(NotificationCommandDto message, ResourceAccessException e) {
-        log.error("Network/Timeout error: {}", e.getMessage());
-        throw new SmsApiException("SMS API connectivity error", true);
-    }
-
-    private void handleUnexpectedError(NotificationCommandDto message, Exception e) {
-        log.error("Unexpected error for {}: {}", message.notificationId(), e.getMessage());
-        throw new SmsApiException("Internal worker error: " + e.getMessage(), false);
-    }
-
-    private String extractMessageId(String responseBody) {
+    private String extractTwilioSid(String responseBody) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
             return root.path("sid").asText("unknown");
         } catch (Exception e) {
-            log.warn("Could not parse SMS API response JSON: {}", e.getMessage());
+            log.warn("Could not parse Twilio response: {}", e.getMessage());
             return "unknown";
         }
+    }
+
+    private boolean isSet(String value) {
+        return value != null && !value.isBlank();
     }
 }

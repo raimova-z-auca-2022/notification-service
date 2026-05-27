@@ -16,9 +16,16 @@ public class AppProperties {
 
     @Data
     public static class Api {
+        // Twilio
         private String baseUrl;
         private String token;
         private String fromNumber;
+
+        // SMSC.ru
+        private String login;
+        private String password;
+        private boolean testMode;
+
         private int timeoutMs;
     }
 

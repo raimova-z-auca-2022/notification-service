@@ -226,7 +226,12 @@ services:
       QUEUE_IN: "q.notification.sms"
       EXCHANGE_STATUS: "x.notification.status"
       STATUS_ROUTING_KEY: "status.sms"
-      # SMS provider credentials - set in your environment or .env
+      # SMSC.ru credentials (takes priority if set)
+      SMS_LOGIN: ${SMS_LOGIN:-}
+      SMS_PASSWORD: ${SMS_PASSWORD:-}
+      SMS_TEST_MODE: ${SMS_TEST_MODE:-false}
+      # Twilio credentials (used if SMSC not configured)
+      SMS_API_URL: ${SMS_API_URL:-}
       SMS_API_TOKEN: ${SMS_API_TOKEN:-}
       SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:-}
     networks:

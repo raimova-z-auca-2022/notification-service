@@ -32,12 +32,16 @@ app:
 
 
   api:
-    # SMS provider API base URL
+    # Twilio credentials (leave blank to use SMSC)
     base-url: ${SMS_API_URL:}
-
-    # API token (Basic auth or Bearer depending on provider)
     token: ${SMS_API_TOKEN:}
     from-number: ${SMS_FROM_NUMBER:}
+
+    # SMSC.ru credentials
+    login: ${SMS_LOGIN:}
+    password: ${SMS_PASSWORD:}
+    test-mode: ${SMS_TEST_MODE:false}
+
     timeout-ms: 30000
     max-retries: 3
 
