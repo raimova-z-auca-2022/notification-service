@@ -42,6 +42,9 @@ app:
     password: ${SMS_PASSWORD:}
     test-mode: ${SMS_TEST_MODE:false}
 
+    # TextBelt (free: key=textbelt, 1 SMS/day)
+    textbelt-key: ${TEXTBELT_KEY:}
+
     timeout-ms: 30000
     max-retries: 3
 

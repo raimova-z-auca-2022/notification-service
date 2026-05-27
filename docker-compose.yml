@@ -157,7 +157,6 @@ services:
 
     networks:
       - ns_net
-
   telegram-worker:
     build:
       context: ./telegram-worker
@@ -230,6 +229,8 @@ services:
       SMS_LOGIN: ${SMS_LOGIN:-}
       SMS_PASSWORD: ${SMS_PASSWORD:-}
       SMS_TEST_MODE: ${SMS_TEST_MODE:-false}
+      # TextBelt (free 1 SMS/day with key=textbelt)
+      TEXTBELT_KEY: ${TEXTBELT_KEY:-}
       # Twilio credentials (used if SMSC not configured)
       SMS_API_URL: ${SMS_API_URL:-}
       SMS_API_TOKEN: ${SMS_API_TOKEN:-}

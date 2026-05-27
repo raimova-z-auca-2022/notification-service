@@ -41,7 +41,7 @@ public class StatusEventPublisher {
     ) {
         StatusEventDto event = new StatusEventDto(
                 cmd.notificationId(),
-                NotificationType.SMS,
+                NotificationType.WHATSAPP,
                 status,
                 cmd.attempt(),
                 errorCode,

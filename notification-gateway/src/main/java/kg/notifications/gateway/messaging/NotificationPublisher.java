@@ -58,7 +58,7 @@ public class NotificationPublisher {
         return switch (type) {
             case EMAIL -> props.getRabbit().getRoutingEmail();
             case TELEGRAM -> props.getRabbit().getRoutingTelegram();
-            case SMS -> {
+            case WHATSAPP -> {
                 String configured = props.getRabbit().getRoutingSms();
                 if (configured != null && !configured.isBlank()) yield configured;
                 yield "sms";

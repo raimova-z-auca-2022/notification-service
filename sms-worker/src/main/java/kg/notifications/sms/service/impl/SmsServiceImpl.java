@@ -50,9 +50,10 @@ public class SmsServiceImpl implements SmsService {
         }
 
         boolean hasSmsc = isSet(props.getApi().getLogin()) && isSet(props.getApi().getPassword());
+        boolean hasTextbelt = isSet(props.getApi().getTextbeltKey());
         boolean hasTwilio = isSet(props.getApi().getBaseUrl());
 
-        if (!hasSmsc && !hasTwilio) {
+        if (!hasSmsc && !hasTextbelt && !hasTwilio) {
             log.info("[MOCK] SMS to {} — no provider configured, marking as SENT", message.recipient());
             statusService.publishSent(message, "mock-" + UUID.randomUUID());
             return;
@@ -61,7 +62,9 @@ public class SmsServiceImpl implements SmsService {
         try {
             validateMessage(message);
 
-            if (hasSmsc) {
+            if (hasTextbelt) {
+                sendViaTextbelt(message);
+            } else if (hasSmsc) {
                 sendViaSmsc(message);
             } else {
                 sendViaTwilio(message);
@@ -118,6 +121,45 @@ public class SmsServiceImpl implements SmsService {
         String messageId = extractSmscMessageId(response.getBody(), message);
         log.info("SMS sent via SMSC.ru for notification {}. ID: {}", message.notificationId(), messageId);
         statusService.publishSent(message, messageId);
+    }
+
+    private void sendViaTextbelt(NotificationCommandDto message) {
+        log.info("Sending SMS via TextBelt to {}", message.recipient());
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("phone", message.recipient());
+        body.add("message", message.text());
+        body.add("key", props.getApi().getTextbeltKey());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "https://textbelt.com/text",
+                new HttpEntity<>(body, headers),
+                String.class
+        );
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new SmsApiException("TextBelt returned HTTP " + response.getStatusCode(), true);
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(response.getBody());
+            if (!root.path("success").asBoolean(false)) {
+                String error = root.path("error").asText("unknown error");
+                throw new SmsApiException("TextBelt error: " + error, false);
+            }
+            String textId = root.path("textId").asText("unknown");
+            log.info("SMS sent via TextBelt for notification {}. textId: {}", message.notificationId(), textId);
+            statusService.publishSent(message, textId);
+        } catch (SmsApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Could not parse TextBelt response: {}", e.getMessage());
+            statusService.publishSent(message, "unknown");
+        }
     }
 
     private void sendViaTwilio(NotificationCommandDto message) {

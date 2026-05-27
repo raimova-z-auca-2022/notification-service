@@ -54,7 +54,7 @@ public class SmsNotificationListener {
     private void sendStatusUpdate(String id, String status, String errCode, String errMsg) {
         StatusEventDto event = new StatusEventDto(
                 id,
-                NotificationType.SMS,
+                NotificationType.WHATSAPP,
                 NotificationStatus.valueOf(status),
                 1,
                 errCode,

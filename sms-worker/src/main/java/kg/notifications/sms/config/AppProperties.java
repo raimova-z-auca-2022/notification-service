@@ -26,6 +26,9 @@ public class AppProperties {
         private String password;
         private boolean testMode;
 
+        // TextBelt
+        private String textbeltKey;
+
         private int timeoutMs;
     }
 
